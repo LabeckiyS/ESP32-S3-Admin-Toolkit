@@ -1,15 +1,18 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.2.0
+ * ESP32-S3 Admin Toolkit, firmware 0.3.0
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
- * USB: Arduino TinyUSB CDC (Serial), HID keyboard descriptor (inactive).
+ * USB: Arduino TinyUSB CDC (Serial) plus active HID keyboard and mouse.
  * BLE: Nordic-style UART service, RX writes and TX notifications.
  * Storage: single latest report in LittleFS, limited to 64 KiB.
  */
 #include <Arduino.h>
 #include <USB.h>
 #include <USBHIDKeyboard.h>
+#include <USBHIDMouse.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
@@ -37,6 +40,11 @@ constexpr int kTftMosi = 3, kTftSclk = 5, kTftBl = 38;
 
 Adafruit_ST7735 display(cfg::kTftCs, cfg::kTftDc, cfg::kTftMosi, cfg::kTftSclk, cfg::kTftRst);
 USBHIDKeyboard keyboard;
+USBHIDMouse mouse;
+struct InputPacket { uint8_t size; uint8_t data[20]; };
+QueueHandle_t hidQueue = nullptr;
+uint8_t utf8Lead = 0;
+bool russianContext = false;
 BLECharacteristic *bleTx = nullptr;
 BLEAdvertising *advertising = nullptr;
 volatile bool bleConnected = false;
@@ -107,7 +115,7 @@ void closeUpload(bool removePartial) {
 }
 
 void usbCommand(const String &line) {
-  if (line == "PING") { usbReply("PONG|0.2.0"); return; }
+  if (line == "PING") { usbReply("PONG|0.3.0"); return; }
   if (line == "SCRIPT") {
     diagnosticStage = "COLLECTOR";
     // Explicitly requested after a BLE RUN; collector payload is build-time pinned.
@@ -211,12 +219,28 @@ void pollUsb() {
 
 class ServerEvents : public BLEServerCallbacks {
   void onConnect(BLEServer *) override { bleConnected = true; }
-  void onDisconnect(BLEServer *) override { bleConnected = false; needAdvertise = true; }
+  void onDisconnect(BLEServer *) override { bleConnected = false; needAdvertise = true; if (hidQueue) xQueueReset(hidQueue); utf8Lead = 0; }
 };
 class RxEvents : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *c) override {
     std::string bytes = c->getValue();
-    if (bytes.size() > 32) return;
+    if (bytes.empty() || bytes.size() > 32) return;
+    const uint8_t first = static_cast<uint8_t>(bytes[0]);
+    // All HID work occurs in the application loop, never the BLE callback.
+    // Acknowledgment is emitted only after a text chunk has actually been typed.
+    if (first == 0x10 || first == 0x02 || bytes.rfind("K|", 0) == 0) {
+      if (!hidQueue || bytes.size() > 20) return;
+      InputPacket item{};
+      item.size = static_cast<uint8_t>(bytes.size());
+      memcpy(item.data, bytes.data(), bytes.size());
+      if (xQueueSend(hidQueue, &item, 0) != pdTRUE) {
+        // For text, the browser also has a timeout and can report failure.
+        if (bleConnected && bleTx) {
+          notifyText("Q|FULL");
+        }
+      }
+      return;
+    }
     String s(bytes.c_str());
     if (s == "GET") requestGet = true;
     else if (s == "START") requestStart = true;
@@ -275,6 +299,129 @@ void hidTap(uint8_t code, bool modifier = false) {
 void typeAscii(const char *s) {
   for (; *s; ++s) { hidTap(static_cast<uint8_t>(*s)); }
 }
+// Physical key positions for the Russian JCUKEN layout. The PC must have RUS
+// selected for Cyrillic text; ESP32 never changes the host layout silently.
+bool cyrillicPosition(uint16_t code, char &physical, bool &upper) {
+  upper = false;
+  if (code == 0x0401) { code = 0x0451; upper = true; }
+  else if (code >= 0x0410 && code <= 0x042F) { code += 0x20; upper = true; }
+  const char *russian = u8"ёйцукенгшщзхъфывапролджэячсмитьбю";
+  const char *physicalKeys = "`qwertyuiop[]asdfghjkl;'zxcvbnm,.";
+  // These two strings enumerate physical positions in the same order.
+  const uint8_t *p = reinterpret_cast<const uint8_t *>(russian);
+  size_t index = 0;
+  while (*p && physicalKeys[index]) {
+    if ((p[0] & 0xE0) != 0xC0 || (p[1] & 0xC0) != 0x80) break;
+    uint16_t c = (uint16_t(p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+    if (c == code) { physical = physicalKeys[index]; return true; }
+    p += 2;
+    ++index;
+  }
+  return false;
+}
+
+void tapPhysical(uint8_t key, bool shift = false) {
+  if (shift) keyboard.press(KEY_LEFT_SHIFT);
+  keyboard.press(key);
+  delay(8);
+  keyboard.releaseAll();
+  delay(8);
+}
+
+void typePcChar(uint8_t c) {
+  if (c == '\r') return;
+  if (c == '\n') { tapPhysical(KEY_RETURN); return; }
+  if (c == '\t') { tapPhysical(KEY_TAB); return; }
+  if (russianContext) {
+    switch (c) {
+      case '.': tapPhysical('/'); return;
+      case ',': tapPhysical('/', true); return;
+      case ':': tapPhysical('6', true); return;
+      case ';': tapPhysical('4', true); return;
+      case '?': tapPhysical('7', true); return;
+      case '"': tapPhysical('2', true); return;
+    }
+  }
+  tapPhysical(c);
+}
+
+void typeUtf8Chunk(const uint8_t *data, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    uint8_t b = data[i];
+    if (utf8Lead != 0) {
+      uint8_t lead = utf8Lead;
+      utf8Lead = 0;
+      if ((b & 0xC0) == 0x80) {
+        const uint16_t c = (uint16_t(lead & 0x1F) << 6) | (b & 0x3F);
+        char physical = 0;
+        bool upper = false;
+        if (cyrillicPosition(c, physical, upper)) {
+          russianContext = true;
+          tapPhysical(static_cast<uint8_t>(physical), upper);
+        }
+      }
+      continue;
+    }
+    if (b == 0xD0 || b == 0xD1) { utf8Lead = b; continue; }
+    if (b < 128) {
+      if ((b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')) russianContext = false;
+      typePcChar(b);
+    }
+  }
+}
+
+void tapShortcut(uint8_t modifier, uint8_t key) {
+  keyboard.press(modifier);
+  keyboard.press(key);
+  delay(80);
+  keyboard.releaseAll();
+  delay(8);
+}
+
+void keyboardCommand(const String &cmd) {
+  if (cmd == "ENTER") tapPhysical(KEY_RETURN);
+  else if (cmd == "TAB") tapPhysical(KEY_TAB);
+  else if (cmd == "ESC") tapPhysical(KEY_ESC);
+  else if (cmd == "BACKSPACE") tapPhysical(KEY_BACKSPACE);
+  else if (cmd == "DELETE") tapPhysical(KEY_DELETE);
+  else if (cmd == "COPY") tapShortcut(KEY_LEFT_CTRL, 'c');
+  else if (cmd == "PASTE") tapShortcut(KEY_LEFT_CTRL, 'v');
+  else if (cmd == "CUT") tapShortcut(KEY_LEFT_CTRL, 'x');
+  else if (cmd == "SELECT_ALL") tapShortcut(KEY_LEFT_CTRL, 'a');
+  else if (cmd == "UNDO") tapShortcut(KEY_LEFT_CTRL, 'z');
+  else if (cmd == "CONTEXT_MENU") tapShortcut(KEY_LEFT_SHIFT, KEY_F10);
+  else if (cmd == "PROPERTIES") tapShortcut(KEY_LEFT_ALT, KEY_RETURN);
+  else if (cmd == "WIN") tapShortcut(KEY_LEFT_GUI, ' ');
+  // Ctrl+Alt+Del is a Windows secure attention sequence: not emulated.
+}
+
+void applyMouse(const InputPacket &item) {
+  if (item.size < 3) return;
+  const uint8_t *b = item.data;
+  if (b[1] == 'm' && item.size == 4)
+    mouse.move(static_cast<int>(b[2]) - 128, static_cast<int>(b[3]) - 128, 0);
+  else if (b[1] == 'c' && item.size == 3)
+    mouse.click(b[2]);
+  else if (b[1] == 's' && item.size == 3)
+    mouse.move(0, 0, static_cast<int>(b[2]) - 128);
+}
+
+void pollHid() {
+  if (!hidQueue || !bleConnected || hidBusy || requestRun) return;
+  InputPacket item{};
+  if (xQueueReceive(hidQueue, &item, 0) != pdTRUE || !item.size) return;
+  if (item.data[0] == 0x10) {
+    typeUtf8Chunk(item.data + 1, item.size - 1);
+    notifyText("Q|OK");
+  } else if (item.data[0] == 0x02) {
+    applyMouse(item);
+  } else if (item.size > 2 && item.data[0] == 'K' && item.data[1] == '|') {
+    char cmd[20]{};
+    memcpy(cmd, item.data + 2, item.size - 2);
+    keyboardCommand(String(cmd));
+  }
+}
+
 void launchCollector() {
   if (!bleConnected || hidBusy) return;
   hidBusy = true;
@@ -351,7 +498,7 @@ void renderDisplay() {
   display.setTextColor(ST77XX_CYAN);
   display.setCursor(2, 12);
   display.println("ADMIN TOOLKIT");
-  display.println("  v0.2.0");
+  display.println("  v0.3.0");
   display.setTextColor(ST77XX_WHITE);
   display.print("USB: "); display.println("CDC");
   display.print("BLE: "); display.println(bleConnected ? "linked" : "waiting");
@@ -388,7 +535,9 @@ void setup() {
       if (reportSize > cfg::kMaxReport) { LittleFS.remove(cfg::kReport); reportSize = 0; }
     }
   }
-  keyboard.begin(); // Descriptor only; does not type into the target PC.
+  hidQueue = xQueueCreate(48, sizeof(InputPacket));
+  keyboard.begin();
+  mouse.begin();
   USB.begin();
   Serial.begin(115200);
   usbLine.reserve(280);
@@ -412,6 +561,7 @@ void setup() {
 
 void loop() {
   pollUsb();
+  pollHid();
   if (requestRun) { requestRun = false; launchCollector(); }
   if (needAdvertise) {
     needAdvertise = false;

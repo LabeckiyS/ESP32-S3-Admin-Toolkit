@@ -29,3 +29,7 @@ v0.2: адаптивный BLE размер кадра и пакетное ACK; 
 Поток обратной передачи не меняется: PowerShell -> CDC `BEGIN/DATA/END` -> LittleFS -> BLE `GET/START/D/A/E` -> Android Chrome. После `DONE` ESP32 посылает `P|DONE`, и UI автоматически запускает `GET`. Сообщения `P|LAUNCHING`, `P|BOOTSTRAP`, `P|RECEIVING` служат ориентиром, а не гарантией выполнения в Windows.
 
 Не используется Wi-Fi, системная установка агента, персистентность, повышение прав или автоматический запуск при подключении USB. Недостаток: HID-текст зависит от раскладки и активного рабочего стола; COM VID 303A требует проверки на реальной сборке.
+
+## v0.3 Unified input & inventory
+
+On page load the keyboard tab is displayed first. Both tabs share one BLE GATT connection (Nordic-style UART service). Keyboard UTF-8 data packets are prefixed with `0x10` and limited to 19 payload bytes; the firmware processes them in a FreeRTOS queue and responds with `Q|OK` *after* typing, so the browser can throttle data and avoid overflow. USB HID mouse packets start with `0x02`; shortcut commands use ASCII `K|NAME`. The existing diagnostics protocol is unchanged. No Wi-Fi, BLE PIN or bonding. Composite HID keyboard + mouse + CDC enumeration must be hardware-tested on Windows; CI builds only verify compilation.

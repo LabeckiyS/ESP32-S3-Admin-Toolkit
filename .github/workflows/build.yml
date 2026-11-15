@@ -14,9 +14,9 @@ jobs:
       - name: Run Python tests
         run: python3 -m unittest discover -s tests -v
       - name: Test browser BLE protocol
-        run: node --test tests/web.test.cjs
+        run: node --test tests/*.test.cjs
       - name: Static JavaScript syntax
-        run: node --check web/app.js
+        run: node --check web/app.js && node --check web/keyboard.js
       - name: Install PlatformIO
         run: pip install platformio
       - name: Build firmware

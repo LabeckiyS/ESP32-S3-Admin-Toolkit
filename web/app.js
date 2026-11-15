@@ -10,16 +10,16 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const encoder = new TextEncoder();
 function log(message) { $('log').textContent = `[${new Date().toLocaleTimeString()}] ${message}\n` + $('log').textContent.slice(0, 4200); }
 function status(message, connected) { $('status').textContent = message; $('dot').classList.toggle('online', !!connected); }
-function ui() { $('run').disabled = !rx; $('get').disabled = !rx; $('cancel').disabled = !rx || !current; }
+function ui() { $('run').disabled = !rx; $('get').disabled = !rx; $('cancel').disabled = !rx || !current; if (typeof updateKeyboardUI === 'function') updateKeyboardUI(!!rx); }
 function progress(done, total) { $('progress').style.width = (total ? Math.min(100, 100 * done / total) : 0).toFixed(1) + '%'; }
-function queueCommand(text) {
+function queueBytes(payload) {
   if (!rx) return Promise.reject(new Error('BLE не подключён'));
   // Serialized writes matter: ACK to the previous frame must not be reordered.
-  const payload = encoder.encode(text);
   const result = writeQueue.then(() => rx.writeValueWithResponse(payload));
   writeQueue = result.catch(() => {});
   return result;
 }
+function queueCommand(text) { return queueBytes(encoder.encode(text)); }
 function crc32(bytes) {
   let crc = 0xFFFFFFFF;
   for (const byte of bytes) {
@@ -56,6 +56,10 @@ function onFrame(event) {
   }
   let message;
   try { message = decoder.decode(buf); } catch { log('Некорректный служебный BLE-пакет'); return; }
+  if (message === 'Q|OK' || message === 'Q|FULL') {
+    if (typeof onKeyboardAck === 'function') onKeyboardAck(message === 'Q|OK');
+    return;
+  }
   if (message.startsWith('M|')) {
     const fields = message.split('|');
     const size = Number(fields[1]);
@@ -157,6 +161,18 @@ function download(content, filename, mime) {
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// Default tab is always the keyboard, independent of the previous visit.
+function selectTab(name) {
+  const keyboard = name === 'keyboard';
+  $('keyboard-panel').hidden = !keyboard;
+  $('diagnostics-panel').hidden = keyboard;
+  $('tab-keyboard').classList.toggle('selected', keyboard);
+  $('tab-diagnostics').classList.toggle('selected', !keyboard);
+  $('tab-keyboard').setAttribute('aria-selected', String(keyboard));
+  $('tab-diagnostics').setAttribute('aria-selected', String(!keyboard));
+}
+$('tab-keyboard').addEventListener('click', () => selectTab('keyboard'));
+$('tab-diagnostics').addEventListener('click', () => selectTab('diagnostics'));
 $('connect').addEventListener('click', connect);
 $('run').addEventListener('click', async () => {
   try { await queueCommand('RUN'); log('Запуск подтверждён: ESP32 открывает PowerShell на ПК.'); }
@@ -172,6 +188,11 @@ $('cancel').addEventListener('click', async () => {
 });
 $('json').addEventListener('click', () => {
   if (report) download(report.bytes, (report.object.system?.computerName || 'pc') + '.json', 'application/json;charset=utf-8');
+});
+$('copy-report').addEventListener('click', async () => {
+  if (!report) return;
+  try { await navigator.clipboard.writeText(JSON.stringify(report.object, null, 2)); log('Отчёт скопирован.'); }
+  catch (err) { log('Не удалось скопировать отчёт: ' + err.message); }
 });
 $('txt').addEventListener('click', () => {
   if (report) download(JSON.stringify(report.object, null, 2), (report.object.system?.computerName || 'pc') + '.txt', 'text/plain;charset=utf-8');

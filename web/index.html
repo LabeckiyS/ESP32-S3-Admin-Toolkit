@@ -2,28 +2,90 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Admin Toolkit S3 — диагностика</title>
+<title>Admin Toolkit S3 — клавиатура и диагностика</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main>
-  <header><div class="eyebrow">ESP32-S3 / BLE-ONLY</div><h1>Admin Toolkit <span>v0.2</span></h1><p>Аппаратная инвентаризация Windows с передачей отчёта через USB CDC и Bluetooth.</p></header>
-  <section class="card">
-    <div class="toolbar"><div><h2>Подключение</h2><div class="muted" id="status">Не подключено</div></div><div class="dot" id="dot"></div></div>
-    <div class="toolbar wrap"><button id="connect">Подключить ESP32</button><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
-    <div class="progress-bg"><div class="progress" id="progress"></div></div>
-    <div class="muted small" id="detail">Вставьте прибор в разблокированный Windows-ПК, установите раскладку ENG и нажмите «Старт диагностики».</div>
+  <header>
+    <div class="eyebrow">ESP32-S3 / BLE-ONLY</div>
+    <h1>Admin Toolkit <span>v0.3</span></h1>
+    <p>Беспроводная клавиатура, мышь и диагностика Windows в одной панели.</p>
+  </header>
+  <section class="card" aria-label="Соединение с устройством">
+    <div class="toolbar"><div><h2>Подключение по Bluetooth</h2><div class="muted" id="status">Не подключено</div></div><div class="dot" id="dot"></div></div>
+    <div class="toolbar wrap"><button id="connect">Подключить ESP32</button></div>
   </section>
-  <section class="card" id="summary" hidden><h2>Технический паспорт ПК</h2><div class="metrics" id="metrics"></div><p class="muted small" id="stamp"></p>
-    <div class="toolbar wrap"><button id="json" class="secondary">Скачать JSON</button><button id="txt" class="secondary">Скачать TXT</button></div>
-    <h2>Разделы отчёта</h2><div id="sections"></div>
-  </section>
-  <section class="card"><h2>Журнал</h2><pre id="log" aria-live="polite">Ожидается подключение устройства.</pre></section>
-  <p class="foot">Нет автоматического запуска при подключении USB. Кнопка «Старт» открывает видимый PowerShell в Windows (ENG, разблокированный рабочий стол). Без Wi-Fi и PIN. Передавай только несекретные диагностические данные. BLE без сопряжения не защищает корпоративную информацию от прослушивания и подключения посторонних устройств.</p>
+  <nav class="tabs" aria-label="Режим прибора">
+    <button type="button" class="tab selected" id="tab-keyboard" aria-selected="true" aria-controls="keyboard-panel">Клавиатура</button>
+    <button type="button" class="tab" id="tab-diagnostics" aria-selected="false" aria-controls="diagnostics-panel">Диагностика</button>
+  </nav>
+
+  <div id="keyboard-panel">
+    <section class="card">
+      <h2>Текст</h2>
+      <textarea id="keyboard-text" rows="5" placeholder="Введите текст для компьютера…"></textarea>
+      <div class="toolbar wrap">
+        <button class="hid-control" id="send-text" disabled>Отправить текст</button>
+        <label class="inline-label"><input type="checkbox" id="send-enter" checked> Enter после текста</label>
+      </div>
+      <p class="muted small">Выбирай раскладку ENG или RUS на самом компьютере перед отправкой соответствующего текста.</p>
+    </section>
+    <section class="card">
+      <h2>Клавиши</h2>
+      <div class="key-grid">
+        <button class="secondary hid-control key-action" data-key="ENTER" disabled>Enter</button>
+        <button class="secondary hid-control key-action" data-key="TAB" disabled>Tab</button>
+        <button class="secondary hid-control key-action" data-key="ESC" disabled>Esc</button>
+        <button class="secondary hid-control key-action" data-key="BACKSPACE" disabled>⌫ Backspace</button>
+        <button class="secondary hid-control key-action" data-key="DELETE" disabled>Delete</button>
+        <button class="secondary hid-control key-action" data-key="COPY" disabled>Копировать</button>
+        <button class="secondary hid-control key-action" data-key="PASTE" disabled>Вставить</button>
+        <button class="secondary hid-control key-action" data-key="CUT" disabled>Вырезать</button>
+        <button class="secondary hid-control key-action" data-key="SELECT_ALL" disabled>Выделить всё</button>
+        <button class="secondary hid-control key-action" data-key="UNDO" disabled>Отменить</button>
+        <button class="secondary hid-control key-action" data-key="CONTEXT_MENU" disabled>Контекстное меню</button>
+        <button class="secondary hid-control key-action" data-key="PROPERTIES" disabled>Свойства</button>
+        <button class="secondary hid-control key-action" data-key="WIN" disabled>Сменить язык</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Мышь</h2>
+      <div id="trackpad" tabindex="0" aria-label="Сенсорная площадка мыши">Веди пальцем для движения курсора<br>Касание — левый клик · удержание — правый клик</div>
+      <label class="sensitivity-control" for="sensitivity"><span>Чувствительность</span><input id="sensitivity" type="range" min="0.3" max="5" step="0.1" value="1.6"><output id="sensitivity-value">1.6×</output></label>
+      <div class="key-grid mouse-grid">
+        <button class="secondary hid-control mouse-button" data-button="1" disabled>Левая</button>
+        <button class="secondary hid-control mouse-button" data-button="2" disabled>Правая</button>
+        <button class="secondary hid-control mouse-button" data-button="4" disabled>Средняя</button>
+        <button class="secondary hid-control scroll-button" data-scroll="-3" disabled>Прокрутка ↑</button>
+        <button class="secondary hid-control scroll-button" data-scroll="3" disabled>Прокрутка ↓</button>
+      </div>
+    </section>
+    <section class="card"><h2>Журнал клавиатуры</h2><pre id="keyboard-log">Ожидается подключение BLE.</pre></section>
+  </div>
+
+  <div id="diagnostics-panel" hidden>
+    <section class="card">
+      <h2>Диагностика Windows</h2>
+      <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК, выбери ENG, затем нажми «Старт».</p>
+      <div class="toolbar wrap"><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
+      <div class="progress-bg"><div class="progress" id="progress"></div></div>
+      <div class="muted small" id="detail">Компьютер пока не обследован.</div>
+    </section>
+    <section class="card" id="summary" hidden>
+      <h2>Технический паспорт ПК</h2><div class="metrics" id="metrics"></div><p class="muted small" id="stamp"></p>
+      <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать</button><button id="txt" class="secondary">Скачать TXT</button><button id="json" class="secondary">Скачать JSON</button></div>
+      <h2>Разделы отчёта</h2><div id="sections"></div>
+    </section>
+    <section class="card"><h2>Журнал диагностики</h2><pre id="log" aria-live="polite">Ожидается подключение устройства.</pre></section>
+    <p class="foot">Диагностика запускается только кнопкой «Старт» на разблокированном компьютере. PowerShell открывается видимо и может быть заблокирован корпоративными политиками. Без PIN/BLE pairing передавай только тестовые несекретные данные.</p>
+  </div>
+  <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
 <script src="app.js" defer></script>
+<script src="keyboard.js" defer></script>
 </body>
 </html>
