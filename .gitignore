@@ -1,0 +1,11 @@
+.pio/
+.vscode/
+__pycache__/
+.pytest_cache/
+collectors/windows/reports/
+*.log
+*.bak
+*.bin
+*.elf
+*.map
+.DS_Store

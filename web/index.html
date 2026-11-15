@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Admin Toolkit S3 — диагностика</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <header><div class="eyebrow">ESP32-S3 / BLE-ONLY</div><h1>Admin Toolkit <span>v0.2</span></h1><p>Аппаратная инвентаризация Windows с передачей отчёта через USB CDC и Bluetooth.</p></header>
+  <section class="card">
+    <div class="toolbar"><div><h2>Подключение</h2><div class="muted" id="status">Не подключено</div></div><div class="dot" id="dot"></div></div>
+    <div class="toolbar wrap"><button id="connect">Подключить ESP32</button><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
+    <div class="progress-bg"><div class="progress" id="progress"></div></div>
+    <div class="muted small" id="detail">Вставьте прибор в разблокированный Windows-ПК, установите раскладку ENG и нажмите «Старт диагностики».</div>
+  </section>
+  <section class="card" id="summary" hidden><h2>Технический паспорт ПК</h2><div class="metrics" id="metrics"></div><p class="muted small" id="stamp"></p>
+    <div class="toolbar wrap"><button id="json" class="secondary">Скачать JSON</button><button id="txt" class="secondary">Скачать TXT</button></div>
+    <h2>Разделы отчёта</h2><div id="sections"></div>
+  </section>
+  <section class="card"><h2>Журнал</h2><pre id="log" aria-live="polite">Ожидается подключение устройства.</pre></section>
+  <p class="foot">Нет автоматического запуска при подключении USB. Кнопка «Старт» открывает видимый PowerShell в Windows (ENG, разблокированный рабочий стол). Без Wi-Fi и PIN. Передавай только несекретные диагностические данные. BLE без сопряжения не защищает корпоративную информацию от прослушивания и подключения посторонних устройств.</p>
+</main>
+<script src="app.js" defer></script>
+</body>
+</html>
