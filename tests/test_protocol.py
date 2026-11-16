@@ -1,5 +1,6 @@
 """Dependency-free checks for framing, CRC32, and the v0.1 budget."""
 import binascii
+from pathlib import Path
 import json
 import unittest
 import zlib
@@ -56,3 +57,14 @@ class ProtocolTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class KeyboardLayoutContractTests(unittest.TestCase):
+    def test_layout_switch_only_when_ru_selected(self):
+        source = (Path(__file__).resolve().parents[1] / "firmware/src/main.cpp").read_text(encoding="utf-8")
+        self.assertIn('s == "RUN|RU"', source)
+        self.assertIn('s == "RUN" || s == "RUN|EN"', source)
+        self.assertIn("void selectEnglishIfRussian(bool fromRussian)", source)
+        self.assertIn("if (!fromRussian) return;", source)
+        launch = source[source.index("void launchCollector(bool fromRussian)") : source.index("void pollTransfer()")]
+        self.assertLess(launch.index("selectEnglishIfRussian(fromRussian);"), launch.index("typeAscii(\"powershell.exe"))
