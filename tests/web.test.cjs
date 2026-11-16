@@ -86,14 +86,14 @@ test('DONE progress automatically requests report', async () => {
 // cannot detect or guarantee the input language on an arbitrary Windows PC.
 test('RUN from RUS requests a layout switch before diagnostics', async () => {
   const r = makeRuntime();
-  r.elements.get('pc-layout').value = 'ru';
+  r.env.document.getElementById('pc-layout').value = 'ru';
   await r.elements.get('run').click();
   assert.equal(r.env.writes.at(-1), 'RUN|RU');
 });
 
 test('RUN from ENG never toggles host keyboard layout', async () => {
   const r = makeRuntime();
-  r.elements.get('pc-layout').value = 'en';
+  r.env.document.getElementById('pc-layout').value = 'en';
   await r.elements.get('run').click();
   assert.equal(r.env.writes.at(-1), 'RUN|EN');
 });
