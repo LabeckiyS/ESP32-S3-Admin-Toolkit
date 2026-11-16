@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.0
+ * ESP32-S3 Admin Toolkit, firmware 0.3.1
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -115,7 +115,7 @@ void closeUpload(bool removePartial) {
 }
 
 void usbCommand(const String &line) {
-  if (line == "PING") { usbReply("PONG|0.3.0"); return; }
+  if (line == "PING") { usbReply("PONG|0.3.1"); return; }
   if (line == "SCRIPT") {
     diagnosticStage = "COLLECTOR";
     // Explicitly requested after a BLE RUN; collector payload is build-time pinned.
@@ -498,7 +498,7 @@ void renderDisplay() {
   display.setTextColor(ST77XX_CYAN);
   display.setCursor(2, 12);
   display.println("ADMIN TOOLKIT");
-  display.println("  v0.3.0");
+  display.println("  v0.3.1");
   display.setTextColor(ST77XX_WHITE);
   display.print("USB: "); display.println("CDC");
   display.print("BLE: "); display.println(bleConnected ? "linked" : "waiting");
