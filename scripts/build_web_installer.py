@@ -22,6 +22,7 @@ def make_manifest(version=FIRMWARE_VERSION):
         "name": "ESP32-S3 Admin Toolkit",
         "version": version,
         "new_install_prompt_erase": True,
+        "new_install_improv_wait_time": 0,  # BLE-only: no Improv Wi-Fi serial probe
         "builds": [
             {
                 "chipFamily": "ESP32-S3",

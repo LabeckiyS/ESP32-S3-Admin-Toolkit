@@ -37,10 +37,13 @@ esp-web-install-button { --esp-tools-button-color:#2975d8; --esp-tools-button-te
 <span slot="unsupported">Требуется Chrome или Edge на компьютере с поддержкой Web Serial.</span>
 <span slot="not-allowed">Открой страницу через HTTPS.</span>
 </esp-web-install-button>
+<button class="secondary" id="check-port" type="button">Проверить USB-порт</button>
 </div>
+<p class="hint" id="port-status" role="status" aria-live="polite">После входа в BOOT можно проверить USB VID/PID — без открытия COM-порта и без прошивки.</p>
+<p class="hint"><strong>Проверка порта:</strong> нажми «Проверить USB-порт» и выбери устройство ESP32-S3 в диалоге браузера. Обычно встроенный USB ESP32-S3 имеет VID <code>0x303A</code>. Указанный VID/PID лишь идентифицирует USB-устройство и не гарантирует, что ROM-загрузчик отвечает.</p>
 <p class="hint">Если получаешь «Failed to initialize»: нажми Back, закрой PlatformIO, Arduino IDE, последовательные терминалы и Chrome-вкладки, которые открыли тот же COM-порт. Отключи T-Dongle-S3, заново удерживай BOOT при подключении, дождись серого экрана, отпусти BOOT и повтори установку, выбрав USB JTAG/serial debug unit. Если такого порта нет, проверь Windows → Диспетчер устройств → Порты; не выбирай наугад другой COM-порт.</p>
 <p class="hint">Файлы прошивки публикуются автоматически только после успешной сборки GitHub Actions; если manifest или .bin недоступны, установка не выполнится.</p>
 </section>
 <section class="card install-card"><h2>Вернуть прежнюю клавиатуру</h2>
 <p class="hint">Если требуется откат, используй <a href="https://labeckiys.github.io/Wireless_keyboard_for_phone-ESP32-T-Dongle-S3/web/index.html" target="_blank" rel="noopener noreferrer">проверенный веб-установщик клавиатуры v11.1</a>. Новая объединённая прошивка пока не проверена на физической плате.</p></section>
-</main></body></html>
+</main><script src="./usb-check.js" defer></script></body></html>
