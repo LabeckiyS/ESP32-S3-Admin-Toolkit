@@ -12,10 +12,14 @@ function log(message) { $('log').textContent = `[${new Date().toLocaleTimeString
 function status(message, connected) { $('status').textContent = message; $('dot').classList.toggle('online', !!connected); }
 function ui() { $('run').disabled = !rx; $('get').disabled = !rx; $('cancel').disabled = !rx || !current; if (typeof updateKeyboardUI === 'function') updateKeyboardUI(!!rx); }
 function progress(done, total) { $('progress').style.width = (total ? Math.min(100, 100 * done / total) : 0).toFixed(1) + '%'; }
-function queueBytes(payload) {
+function queueBytes(payload, withoutResponse = false) {
   if (!rx) return Promise.reject(new Error('BLE не подключён'));
-  // Serialized writes matter: ACK to the previous frame must not be reordered.
-  const result = writeQueue.then(() => rx.writeValueWithResponse(payload));
+  // Shared GATT serialization for commands, diagnostics ACKs, and mouse packets.
+  // Mouse supports WRITE_NR to avoid a BLE round-trip per cursor movement.
+  const characteristic = rx;
+  const result = writeQueue.then(() => withoutResponse && typeof characteristic.writeValueWithoutResponse === 'function'
+    ? characteristic.writeValueWithoutResponse(payload)
+    : characteristic.writeValueWithResponse(payload));
   writeQueue = result.catch(() => {});
   return result;
 }

@@ -8,6 +8,7 @@ const webDir = path.join(__dirname, '..', 'web');
 
 function createRuntime() {
   const elements = new Map();
+  const intervals = [];
   function element() {
     return {
       value: '', hidden: false, disabled: false, checked: false, style: {}, dataset: {},
@@ -15,7 +16,7 @@ function createRuntime() {
       classList: { classes:new Set(), toggle(name, on) { if (on) this.classes.add(name); else this.classes.delete(name); } },
       addEventListener(name, fn) { this.listeners[name] = fn; },
       setAttribute(name, value) { this.attributes[name] = value; },
-      append() {}, replaceChildren() {}, click() {}
+      append() {}, replaceChildren() {}, click() {}, setPointerCapture() {}
     };
   }
   const document = {
@@ -28,11 +29,11 @@ function createRuntime() {
   document.getElementById('diagnostics-panel').hidden = true;
   const env = {document, navigator:{}, Date, TextDecoder, TextEncoder, Uint8Array, DataView, Blob,
     URL:{createObjectURL:()=> 'blob:mock', revokeObjectURL(){}},
-    setTimeout, clearTimeout, setInterval:()=>0, clearInterval(){} };
+    setTimeout, clearTimeout, setInterval:fn=>{ intervals.push(fn); return intervals.length; }, clearInterval(){} };
   vm.createContext(env);
   vm.runInContext(fs.readFileSync(path.join(webDir,'app.js'),'utf8'),env);
   vm.runInContext(fs.readFileSync(path.join(webDir,'keyboard.js'),'utf8'),env);
-  return { env, elements, el: id => document.getElementById(id), run: code => vm.runInContext(code,env) };
+  return { env, elements, intervals, el: id => document.getElementById(id), run: code => vm.runInContext(code,env) };
 }
 
 test('keyboard is default and diagnostics is optional', () => {
@@ -76,6 +77,32 @@ test('keyboard HID command encoding is separate from diagnostics RUN', async () 
   await runtime.run("queueCommand('RUN')");
   assert.equal(new TextDecoder().decode(packets[0]),'K|COPY');
   assert.equal(new TextDecoder().decode(packets[1]),'RUN');
+});
+
+test('mouse coalesces delayed BLE movements and uses write without response', async () => {
+  const rt = createRuntime();
+  const packets = [];
+  let release = null;
+  rt.env.testRx = {
+    writeValueWithResponse: async () => { throw Error('mouse should use WRITE_NR'); },
+    writeValueWithoutResponse: bytes => new Promise(resolve => { packets.push(Uint8Array.from(bytes)); release = resolve; })
+  };
+  rt.run('rx = testRx; ui()');
+  const pad = rt.el('trackpad');
+  pad.listeners.pointerdown({clientX: 0, clientY: 0, pointerId: 1, preventDefault(){}});
+  pad.listeners.pointermove({clientX: 100, clientY: 0});
+  for (const tick of rt.intervals) tick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(packets.length, 1);
+  pad.listeners.pointermove({clientX: 150, clientY: 0});
+  for (let i = 0; i < 10; i++) for (const tick of rt.intervals) tick();
+  assert.equal(packets.length, 1, 'stalled write should not create queued BLE writes');
+  release();
+  await new Promise(resolve => setImmediate(resolve));
+  for (const tick of rt.intervals) tick();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(packets.length, 2);
+  release();
 });
 
 test('keyboard and diagnostics scripts have no WiFi coupling', () => {

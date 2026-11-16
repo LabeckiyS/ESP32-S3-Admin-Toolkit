@@ -63,7 +63,24 @@ function mousePacket(kind, value) {
     : kind === 'c'
       ? new Uint8Array([0x02, 0x63, value])
       : new Uint8Array([0x02, 0x73, (limitByte(value) + 128) & 255]);
-  queueBytes(bytes).catch(err => keyboardLog('Мышь: ' + err.message));
+  return queueBytes(bytes, kind === 'm').catch(err => keyboardLog('Мышь: ' + err.message));
+}
+// Never queue unbounded historical cursor movements. Keep at most one in-flight
+// move and aggregate the newest deltas. WRITE_NR avoids BLE response latency.
+let mouseMoveBusy = false;
+let mousePendingX = 0, mousePendingY = 0;
+async function flushMouseMovement() {
+  if (!rx || mouseMoveBusy) return;
+  const x = limitByte(mousePendingX), y = limitByte(mousePendingY);
+  if (!x && !y) return;
+  mousePendingX -= x;
+  mousePendingY -= y;
+  mouseMoveBusy = true;
+  try {
+    await mousePacket('m', [x, y]);
+  } finally {
+    mouseMoveBusy = false;
+  }
 }
 for (const el of document.querySelectorAll('.mouse-button')) {
   el.addEventListener('click', () => mousePacket('c', Number(el.dataset.button)));
@@ -102,9 +119,13 @@ pad.addEventListener('pointerup', () => {
 });
 pad.addEventListener('pointercancel', () => { down = false; clearTimeout(longTimer); accX = accY = 0; });
 setInterval(() => {
-  if (!rx || (!accX && !accY)) return;
-  const x = limitByte(accX * sensitivity), y = limitByte(accY * sensitivity);
-  accX = accY = 0;
-  if (x || y) mousePacket('m', [x, y]);
-}, 40);
+  if (!rx) { accX = accY = mousePendingX = mousePendingY = 0; return; }
+  if (accX || accY) {
+    // Input is accumulated rather than enqueued; cap backlog to two HID moves.
+    mousePendingX = Math.max(-254, Math.min(254, mousePendingX + Math.round(accX * sensitivity)));
+    mousePendingY = Math.max(-254, Math.min(254, mousePendingY + Math.round(accY * sensitivity)));
+    accX = accY = 0;
+  }
+  void flushMouseMovement();
+}, 30);
 updateKeyboardUI(!!rx);

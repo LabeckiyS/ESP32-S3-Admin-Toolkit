@@ -28,7 +28,7 @@ class BootstrapTests(unittest.TestCase):
         bootstrap = text.split('kBootstrap[] PROGMEM = R"BOOT(', 1)[1].split(')BOOT"', 1)[0]
         self.assertTrue(bootstrap.isascii())
         self.assertLess(len(bootstrap), 1200)
-        for required in ('VID_303A', "'SCRIPT'", 'SHA256', 'WriteAllBytes', '& $f'):
+        for required in ('VID_303A', "'SCRIPT'", 'SHA256', 'WriteAllBytes', '@(239,187,191)', '& $f'):
             self.assertIn(required, bootstrap)
         for forbidden in ('ExecutionPolicy Bypass','DownloadString','Invoke-WebRequest','Invoke-Expression',' -EncodedCommand','-ep bypass'):
             self.assertNotIn(forbidden, bootstrap)
