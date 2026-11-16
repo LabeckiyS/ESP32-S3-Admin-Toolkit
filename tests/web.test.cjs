@@ -9,11 +9,14 @@ const source = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
 function makeRuntime() {
   const elements = new Map();
   function element() {
+    const listeners = new Map();
     return {
-      textContent: '', hidden: false, disabled: false, style: {},
+      textContent: '', hidden: false, disabled: false, style: {}, value: '',
       children: [], classList: { toggle() {} },
-      addEventListener() {}, append(...nodes) { this.children.push(...nodes); },
-      replaceChildren(...nodes) { this.children = nodes; }, click() {}
+      addEventListener(name, handler) { listeners.set(name, handler); },
+      append(...nodes) { this.children.push(...nodes); },
+      replaceChildren(...nodes) { this.children = nodes; },
+      click() { return listeners.get('click')?.(); }
     };
   }
   const doc = {
@@ -77,4 +80,20 @@ test('DONE progress automatically requests report', async () => {
   r.send(new TextEncoder().encode('P|DONE'));
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(r.env.writes.includes('GET'));
+});
+
+// The initial layout is supplied explicitly by the user; Win+Space alone
+// cannot detect or guarantee the input language on an arbitrary Windows PC.
+test('RUN from RUS requests a layout switch before diagnostics', async () => {
+  const r = makeRuntime();
+  r.elements.get('pc-layout').value = 'ru';
+  await r.elements.get('run').click();
+  assert.equal(r.env.writes.at(-1), 'RUN|RU');
+});
+
+test('RUN from ENG never toggles host keyboard layout', async () => {
+  const r = makeRuntime();
+  r.elements.get('pc-layout').value = 'en';
+  await r.elements.get('run').click();
+  assert.equal(r.env.writes.at(-1), 'RUN|EN');
 });
