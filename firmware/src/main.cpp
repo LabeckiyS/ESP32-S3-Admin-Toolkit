@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.1
+ * ESP32-S3 Admin Toolkit, firmware 0.3.2
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -489,22 +489,75 @@ void pollTransfer() {
   }
 }
 
-void renderDisplay() {
-  if (millis() - lastDraw < 900) return;
-  lastDraw = millis();
+// Draw a real graphical splash once, rather than briefly flashing a text line.
+void drawBootSplash() {
   display.fillScreen(ST77XX_BLACK);
   display.setTextSize(1);
-  display.setTextWrap(true);
-  display.setTextColor(ST77XX_CYAN);
-  display.setCursor(2, 12);
-  display.println("ADMIN TOOLKIT");
-  display.println("  v0.3.1");
+  display.setTextWrap(false);
+  const int16_t x = (display.width() - 40) / 2;
+  const int16_t y = 22;
+  display.drawRoundRect(x, y, 40, 40, 4, ST77XX_CYAN);
+  display.drawRoundRect(x + 5, y + 5, 30, 30, 3, ST77XX_CYAN);
+  for (int i = 0; i < 3; ++i) {
+    const int16_t pin = 8 + i * 12;
+    display.drawFastVLine(x + pin, y - 5, 5, ST77XX_CYAN);
+    display.drawFastVLine(x + pin, y + 40, 5, ST77XX_CYAN);
+    display.drawFastHLine(x - 5, y + pin, 5, ST77XX_CYAN);
+    display.drawFastHLine(x + 40, y + pin, 5, ST77XX_CYAN);
+  }
   display.setTextColor(ST77XX_WHITE);
-  display.print("USB: "); display.println("CDC");
-  display.print("BLE: "); display.println(bleConnected ? "linked" : "waiting");
-  display.print("JSON: "); display.println(reportSize);
-  display.setTextColor(ST77XX_GREEN);
-  display.println(uploading ? "Receiving USB" : (transferActive ? "Sending BLE" : diagnosticStage));
+  display.setCursor(x + 14, y + 16);
+  display.print("S3");
+  display.setTextColor(ST77XX_CYAN);
+  display.setCursor(13, 82);
+  display.print("ADMIN");
+  display.setCursor(10, 95);
+  display.print("TOOLKIT");
+  display.drawFastHLine(8, 113, display.width() - 16, ST77XX_CYAN);
+  display.setTextColor(ST77XX_WHITE);
+  display.setCursor(19, 121);
+  display.print("BOOTING");
+}
+
+// Only repaint a status line when its text changes: no full-screen flash.
+void drawChangedLine(int16_t y, const String &value, uint16_t color, String &cached) {
+  if (cached == value) return;
+  cached = value;
+  display.fillRect(0, y, display.width(), 10, ST77XX_BLACK);
+  display.setTextColor(color);
+  display.setCursor(2, y);
+  display.print(value);
+}
+
+void renderDisplay(bool force = false) {
+  if (!force && millis() - lastDraw < 150) return;
+  lastDraw = millis();
+  static bool drawn = false;
+  static String cachedBle, cachedJson, cachedStatus;
+  if (!drawn || force) {
+    display.fillScreen(ST77XX_BLACK);
+    display.setTextSize(1);
+    display.setTextWrap(false);
+    display.setTextColor(ST77XX_CYAN);
+    display.setCursor(2, 12);
+    display.print("ADMIN TOOLKIT");
+    display.setCursor(2, 22);
+    display.print("  v0.3.2");
+    display.setTextColor(ST77XX_WHITE);
+    display.setCursor(2, 37);
+    display.print("USB: CDC");
+    cachedBle = "";
+    cachedJson = "";
+    cachedStatus = "";
+    drawn = true;
+  }
+  drawChangedLine(49, String("BLE: ") + (bleConnected ? "linked" : "waiting"),
+                  ST77XX_WHITE, cachedBle);
+  drawChangedLine(61, String("JSON: ") + String(reportSize),
+                  ST77XX_WHITE, cachedJson);
+  drawChangedLine(75, uploading ? "Receiving USB" :
+                  (transferActive ? "Sending BLE" : diagnosticStage),
+                  ST77XX_GREEN, cachedStatus);
 }
 
 void setup() {
@@ -513,11 +566,7 @@ void setup() {
   digitalWrite(cfg::kTftBl, LOW);
   display.initR(INITR_MINI160x80_PLUGIN);
   display.setRotation(0);
-  display.fillScreen(ST77XX_BLACK);
-  display.setCursor(4, 20);
-  display.setTextColor(ST77XX_CYAN);
-  display.setTextSize(1);
-  display.print("Admin Toolkit boot");
+  drawBootSplash();
 
   fsReady = LittleFS.begin(true);
   if (fsReady && LittleFS.exists(cfg::kReport)) {
@@ -556,7 +605,8 @@ void setup() {
   advertising->addServiceUUID(cfg::kService);
   advertising->setScanResponse(true);
   advertising->start();
-  renderDisplay();
+  delay(1200);  // Keep the boot logo visible before switching to status.
+  renderDisplay(true);
 }
 
 void loop() {
