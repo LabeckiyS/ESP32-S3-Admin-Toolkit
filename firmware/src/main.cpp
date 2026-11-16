@@ -449,15 +449,16 @@ void launchCollector(bool fromRussian) {
   hidBusy = true;
   diagnosticStage = fromRussian ? "SETTING ENG" : "LAUNCHING";
   notifyText(fromRussian ? "P|SETTING_ENG" : "P|LAUNCHING");
-  selectEnglishIfRussian(fromRussian);
-  diagnosticStage = "LAUNCHING";
-  notifyText("P|LAUNCHING");
-  // Windows Run dialog; this is an obvious, visible PowerShell session.
+  // Open the Run dialog FIRST: Windows can remember a different keyboard
+  // layout for each app window. Change layout in the actual input field.
   keyboard.press(KEY_LEFT_GUI);
   keyboard.press('r');
   delay(90);
   keyboard.releaseAll();
   delay(900);
+  selectEnglishIfRussian(fromRussian);
+  diagnosticStage = "LAUNCHING";
+  notifyText("P|LAUNCHING");
   typeAscii("powershell.exe -NoProfile -NoLogo -NoExit");
   hidTap(KEY_RETURN);
   delay(5000);
