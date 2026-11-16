@@ -35,10 +35,15 @@ class BootstrapTests(unittest.TestCase):
 
     def test_hid_only_runs_after_explicit_run_command(self):
         text = MAIN.read_text('utf-8')
-        self.assertIn('else if (s == "RUN") requestRun = true;', text)
-        self.assertIn('if (requestRun) { requestRun = false; launchCollector(); }', text)
+        self.assertIn('s == "RUN|RU"', text)
+        self.assertIn('s == "RUN" || s == "RUN|EN"', text)
+        self.assertIn('void launchCollector(bool fromRussian)', text)
+        self.assertIn('selectEnglishIfRussian(fromRussian);', text)
+        self.assertIn('launchCollector(fromRussian);', text)
         self.assertNotIn('launchCollector();\n  BLEDevice::init', text)
-        self.assertIn("queueCommand('RUN')", WEB.read_text('utf-8'))
+        web = WEB.read_text('utf-8')
+        self.assertIn("queueCommand(fromRussian ? 'RUN|RU' : 'RUN|EN')", web)
+        self.assertIn("fromRussian ? 'RUN|RU' : 'RUN|EN'", web)
 
 if __name__ == '__main__':
     unittest.main()
