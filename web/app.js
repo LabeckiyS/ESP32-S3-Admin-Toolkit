@@ -179,8 +179,13 @@ $('tab-keyboard').addEventListener('click', () => selectTab('keyboard'));
 $('tab-diagnostics').addEventListener('click', () => selectTab('diagnostics'));
 $('connect').addEventListener('click', connect);
 $('run').addEventListener('click', async () => {
-  try { await queueCommand('RUN'); log('Запуск подтверждён: ESP32 открывает PowerShell на ПК.'); }
-  catch (err) { log('RUN: ' + err.message); }
+  const fromRussian = $('pc-layout').value === 'ru';
+  try {
+    await queueCommand(fromRussian ? 'RUN|RU' : 'RUN|EN');
+    log(fromRussian
+      ? 'ESP32 сначала переключит RUS → ENG (Win+Space), затем откроет PowerShell.'
+      : 'ENG уже выбрана: ESP32 откроет PowerShell без переключения.');
+  } catch (err) { log('RUN: ' + err.message); }
 });
 $('get').addEventListener('click', async () => {
   try { current = null; progress(0, 1); await queueCommand('GET'); log('Запрошен последний отчёт с ESP32.'); }
