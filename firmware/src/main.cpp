@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.2
+ * ESP32-S3 Admin Toolkit, firmware 0.3.3
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -55,6 +55,7 @@ volatile bool requestStop = false;
 volatile int32_t ackedSeq = -1;
 volatile bool requestStatus = false;
 volatile bool requestRun = false;
+volatile bool requestRunFromRussian = false;
 bool hidBusy = false;
 
 File upload;
@@ -246,7 +247,16 @@ class RxEvents : public BLECharacteristicCallbacks {
     else if (s == "START") requestStart = true;
     else if (s == "STOP") requestStop = true;
     else if (s == "STATUS") requestStatus = true;
-    else if (s == "RUN") requestRun = true;
+    else if (s == "RUN|RU") {
+      // Host layout was explicitly selected as Russian in the phone UI.
+      requestRunFromRussian = true;
+      requestRun = true;
+    }
+    else if (s == "RUN" || s == "RUN|EN") {
+      // Legacy RUN continues to assume English and does not alter the layout.
+      requestRunFromRussian = false;
+      requestRun = true;
+    }
     else if (s.startsWith("A|")) {
       uint32_t seq = 0;
       if (parseU32(s.substring(2), seq) && seq <= 65535U) ackedSeq = (int32_t)seq;
@@ -288,7 +298,7 @@ void startTransfer() {
 
 
 // Deliberate operator-triggered HID workflow (no automatic action on USB insert).
-// Prerequisites: Windows session unlocked, English keyboard layout, no blocking policy.
+// Prerequisites: unlocked Windows session, permitted scripts, and known host layout.
 void hidTap(uint8_t code, bool modifier = false) {
   if (modifier) keyboard.press(KEY_LEFT_GUI);
   keyboard.press(code);
@@ -422,9 +432,24 @@ void pollHid() {
   }
 }
 
-void launchCollector() {
+void selectEnglishIfRussian(bool fromRussian) {
+  if (!fromRussian) return;
+  // Win+Space cycles layouts; on a PC with ONLY RUS+ENG and currently RUS,
+  // it selects ENG. USB HID cannot query the active Windows input language.
+  // Never toggle when the phone UI says the host is already ENG.
+  keyboard.press(KEY_LEFT_GUI);
+  keyboard.press(' ');
+  delay(100);
+  keyboard.releaseAll();
+  delay(450);
+}
+
+void launchCollector(bool fromRussian) {
   if (!bleConnected || hidBusy) return;
   hidBusy = true;
+  diagnosticStage = fromRussian ? "SETTING ENG" : "LAUNCHING";
+  notifyText(fromRussian ? "P|SETTING_ENG" : "P|LAUNCHING");
+  selectEnglishIfRussian(fromRussian);
   diagnosticStage = "LAUNCHING";
   notifyText("P|LAUNCHING");
   // Windows Run dialog; this is an obvious, visible PowerShell session.
@@ -542,7 +567,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.3.2");
+    display.print("  v0.3.3");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");
@@ -612,7 +637,12 @@ void setup() {
 void loop() {
   pollUsb();
   pollHid();
-  if (requestRun) { requestRun = false; launchCollector(); }
+  if (requestRun) {
+    const bool fromRussian = requestRunFromRussian;
+    requestRun = false;
+    requestRunFromRussian = false;
+    launchCollector(fromRussian);
+  }
   if (needAdvertise) {
     needAdvertise = false;
     stopTransfer();
