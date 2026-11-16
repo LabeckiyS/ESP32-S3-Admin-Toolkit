@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://unpkg.com; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Установка прошивки — ESP32-S3 Admin Toolkit</title>
+<link rel="stylesheet" href="./style.css">
+<style>
+.install-card { max-width:680px; margin:20px auto; }
+.install-card ol { line-height:1.9; padding-left:26px; color:#d7e4fa; }
+.install-card li { margin-bottom:9px; }
+.install-card strong { color:#f5f7fb; }
+.install-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:18px 0; }
+.install-actions a, .backlink { color:#82bdff; }
+esp-web-install-button { --esp-tools-button-color:#2975d8; --esp-tools-button-text-color:#fff; --esp-tools-button-border-radius:9px; }
+.notice { padding:12px 14px; border:1px solid #685438; background:#2a251b; border-radius:10px; line-height:1.6; color:#f2dcae; }
+.hint { color:#aabed7; line-height:1.7; }
+</style>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</head><body><main>
+<header><div class="eyebrow">LILYGO T-DONGLE-S3 V1.1 · ESP32-S3 · 16 MB</div><h1>Онлайн-установка <span>Admin Toolkit</span></h1>
+<p>Беспроводная клавиатура + мышь + диагностика Windows. BLE-only, без Wi-Fi и PIN.</p>
+<p><a class="backlink" href="./index.html">Вернуться к панели управления</a></p></header>
+<section class="card install-card"><h2>Установка с компьютера</h2>
+<div class="notice"><strong>Перед прошивкой:</strong> текущая клавиатура v11.1 будет заменена. Сохрани возможность отката. Установка может стереть настройки и сохранённые отчёты на флеш-памяти платы. Используй USB-порт личного/тестового компьютера, а не производственного оборудования.</div>
+<ol>
+<li>Открой эту страницу на <strong>Windows ПК в Chrome или Edge</strong> по HTTPS. Нужен доступ к интернету для загрузки установщика и прошивки.</li>
+<li>Отключи T-Dongle-S3 от USB. <strong>Зажми BOOT</strong>, вставь устройство обратно в USB и отпусти кнопку через 2–3 секунды.</li>
+<li>Нажми «Установить Admin Toolkit», выбери порт <strong>USB JTAG/serial debug unit</strong> (или соответствующий порт ESP32-S3).</li>
+<li>Подтверди установку в диалоге браузера и дождись завершения. Переподключи плату <strong>без удержания BOOT</strong>.</li>
+<li>На телефоне открой <a href="./index.html">панель управления</a>, подключись к <strong>AdminToolkit-S3</strong> через BLE. Первой откроется «Клавиатура»; «Диагностика» — вторая вкладка.</li>
+</ol>
+<div class="install-actions">
+<esp-web-install-button manifest="./firmware/manifest.json">
+<button slot="activate" type="button">Установить Admin Toolkit</button>
+<span slot="unsupported">Требуется Chrome или Edge на компьютере с поддержкой Web Serial.</span>
+<span slot="not-allowed">Открой страницу через HTTPS.</span>
+</esp-web-install-button>
+</div>
+<p class="hint">Если установка не начинается: закрой PlatformIO, Arduino IDE, терминалы COM-порта и проверь, что плата действительно вошла в BOOT. Доступность USB-порта зависит от драйверов и политик компьютера.</p>
+<p class="hint">Файлы прошивки публикуются автоматически только после успешной сборки GitHub Actions; если manifest или .bin недоступны, установка не выполнится.</p>
+</section>
+<section class="card install-card"><h2>Вернуть прежнюю клавиатуру</h2>
+<p class="hint">Если требуется откат, используй <a href="https://labeckiys.github.io/Wireless_keyboard_for_phone-ESP32-T-Dongle-S3/web/index.html" target="_blank" rel="noopener noreferrer">проверенный веб-установщик клавиатуры v11.1</a>. Новая объединённая прошивка пока не проверена на физической плате.</p></section>
+</main></body></html>
