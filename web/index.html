@@ -12,7 +12,7 @@
 <main>
   <header>
     <div class="eyebrow">ESP32-S3 / BLE-ONLY</div>
-    <h1>Admin Toolkit <span>v0.3.2</span></h1>
+    <h1>Admin Toolkit <span>v0.3.3</span></h1>
     <p>Беспроводная клавиатура, мышь и диагностика Windows в одной панели.</p>
     <p><a class="installer-link" href="./install.html">Установить или обновить прошивку через USB</a></p>
   </header>
@@ -72,7 +72,14 @@
   <div id="diagnostics-panel" hidden>
     <section class="card">
       <h2>Диагностика Windows</h2>
-      <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК, выбери ENG, затем нажми «Старт».</p>
+      <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК. Укажи текущую раскладку и нажми «Старт».</p>
+      <label class="inline-label layout-selector" for="pc-layout">Текущая раскладка на ПК:
+        <select id="pc-layout" class="layout-select">
+          <option value="ru" selected>RUS — переключить на ENG</option>
+          <option value="en">ENG — запуск без переключения</option>
+        </select>
+      </label>
+      <p class="muted small">Автопереключение рассчитано на стандартную пару RUS/ENG. Если раскладок больше двух, выбери ENG вручную и укажи ENG здесь.</p>
       <div class="toolbar wrap"><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
       <div class="muted small" id="detail">Компьютер пока не обследован.</div>
