@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.3
+ * ESP32-S3 Admin Toolkit, firmware 0.3.4
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -55,7 +55,7 @@ volatile bool requestStop = false;
 volatile int32_t ackedSeq = -1;
 volatile bool requestStatus = false;
 volatile bool requestRun = false;
-volatile bool requestRunFromRussian = false;
+volatile bool requestEnglishRequired = false;
 bool hidBusy = false;
 
 File upload;
@@ -248,13 +248,11 @@ class RxEvents : public BLECharacteristicCallbacks {
     else if (s == "STOP") requestStop = true;
     else if (s == "STATUS") requestStatus = true;
     else if (s == "RUN|RU") {
-      // Host layout was explicitly selected as Russian in the phone UI.
-      requestRunFromRussian = true;
-      requestRun = true;
+      // Never toggle the Windows input layout, even for legacy browser clients.
+      requestEnglishRequired = true;
     }
     else if (s == "RUN" || s == "RUN|EN") {
-      // Legacy RUN continues to assume English and does not alter the layout.
-      requestRunFromRussian = false;
+      // Caller confirms that the Windows input language is already ENG.
       requestRun = true;
     }
     else if (s.startsWith("A|")) {
@@ -432,33 +430,19 @@ void pollHid() {
   }
 }
 
-void selectEnglishIfRussian(bool fromRussian) {
-  if (!fromRussian) return;
-  // Win+Space cycles layouts; on a PC with ONLY RUS+ENG and currently RUS,
-  // it selects ENG. USB HID cannot query the active Windows input language.
-  // Never toggle when the phone UI says the host is already ENG.
-  keyboard.press(KEY_LEFT_GUI);
-  keyboard.press(' ');
-  delay(100);
-  keyboard.releaseAll();
-  delay(450);
-}
-
-void launchCollector(bool fromRussian) {
+// No automatic input-language switching: Win+Space would cycle layouts and
+// could leave the user in the wrong language. Only explicit RUN|EN proceeds.
+void launchCollector() {
   if (!bleConnected || hidBusy) return;
   hidBusy = true;
-  diagnosticStage = fromRussian ? "SETTING ENG" : "LAUNCHING";
-  notifyText(fromRussian ? "P|SETTING_ENG" : "P|LAUNCHING");
-  // Open the Run dialog FIRST: Windows can remember a different keyboard
-  // layout for each app window. Change layout in the actual input field.
+  diagnosticStage = "LAUNCHING";
+  notifyText("P|LAUNCHING");
+  // Host layout must already be ENG (selected manually by the operator).
   keyboard.press(KEY_LEFT_GUI);
   keyboard.press('r');
   delay(90);
   keyboard.releaseAll();
   delay(900);
-  selectEnglishIfRussian(fromRussian);
-  diagnosticStage = "LAUNCHING";
-  notifyText("P|LAUNCHING");
   typeAscii("powershell.exe -NoProfile -NoLogo -NoExit");
   hidTap(KEY_RETURN);
   delay(5000);
@@ -568,7 +552,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.3.3");
+    display.print("  v0.3.4");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");
@@ -638,11 +622,14 @@ void setup() {
 void loop() {
   pollUsb();
   pollHid();
+  if (requestEnglishRequired) {
+    requestEnglishRequired = false;
+    diagnosticStage = "SELECT ENG";
+    notifyText("N|ENG_REQUIRED");
+  }
   if (requestRun) {
-    const bool fromRussian = requestRunFromRussian;
     requestRun = false;
-    requestRunFromRussian = false;
-    launchCollector(fromRussian);
+    launchCollector();
   }
   if (needAdvertise) {
     needAdvertise = false;
