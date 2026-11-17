@@ -37,13 +37,17 @@ class BootstrapTests(unittest.TestCase):
         text = MAIN.read_text('utf-8')
         self.assertIn('s == "RUN|RU"', text)
         self.assertIn('s == "RUN" || s == "RUN|EN"', text)
-        self.assertIn('void launchCollector(bool fromRussian)', text)
-        self.assertIn('selectEnglishIfRussian(fromRussian);', text)
-        self.assertIn('launchCollector(fromRussian);', text)
-        self.assertNotIn('launchCollector();\n  BLEDevice::init', text)
+        self.assertIn('void launchCollector()', text)
+        self.assertIn('requestEnglishRequired = true;', text)
+        self.assertIn('notifyText("N|ENG_REQUIRED");', text)
+        self.assertNotIn('selectEnglishIfRussian', text)
+        self.assertIn('launchCollector();', text)
+        setup = text[text.index('void setup()') : text.index('void loop()')]
+        self.assertNotIn('launchCollector();', setup)
         web = WEB.read_text('utf-8')
-        self.assertIn("queueCommand(fromRussian ? 'RUN|RU' : 'RUN|EN')", web)
-        self.assertIn("fromRussian ? 'RUN|RU' : 'RUN|EN'", web)
+        self.assertIn("queueCommand('RUN|EN')", web)
+        self.assertNotIn("queueCommand(fromRussian", web)
+        self.assertIn("if ($('pc-layout').value !== 'en')", web)
 
 if __name__ == '__main__':
     unittest.main()
