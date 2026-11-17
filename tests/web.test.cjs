@@ -138,7 +138,7 @@ test('Technical passport displays copyable text, without download controls', () 
 test('Full diagnostics explicitly selects the FULL collector', async () => {
   const r = makeRuntime();
   r.elements.get('pc-layout').value='en';
-  r.elements.get('scan-mode').value='full';
+  r.env.document.getElementById('scan-mode').value='full';
   await r.elements.get('run').click();
   assert.equal(r.env.writes.at(-1), 'RUN|EN|FULL');
 });
