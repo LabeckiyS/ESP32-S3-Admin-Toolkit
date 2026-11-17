@@ -82,18 +82,28 @@ test('DONE progress automatically requests report', async () => {
   assert.ok(r.env.writes.includes('GET'));
 });
 
-// The initial layout is supplied explicitly by the user; Win+Space alone
-// cannot detect or guarantee the input language on an arbitrary Windows PC.
-test('RUN from RUS requests a layout switch before diagnostics', async () => {
+// No implicit host-language changes. RUN from RUS is refused locally.
+test('RUS blocks diagnostic launch and never sends BLE RUN', async () => {
   const r = makeRuntime();
   r.env.document.getElementById('pc-layout').value = 'ru';
+  r.get('ui()');
+  assert.equal(r.elements.get('run').disabled, true);
   await r.elements.get('run').click();
-  assert.equal(r.env.writes.at(-1), 'RUN|RU');
+  assert.equal(r.env.writes.length, 0);
+  assert.match(r.elements.get('log').textContent, /вручную/);
 });
 
-test('RUN from ENG never toggles host keyboard layout', async () => {
+test('ENG explicitly allows the diagnostic command without layout toggling', async () => {
   const r = makeRuntime();
   r.env.document.getElementById('pc-layout').value = 'en';
+  r.get('ui()');
   await r.elements.get('run').click();
   assert.equal(r.env.writes.at(-1), 'RUN|EN');
+  assert.ok(!r.env.writes.includes('RUN|RU'));
+});
+
+test('ESP32 rejects outdated RUN|RU commands without changing Windows language', () => {
+  const r = makeRuntime();
+  r.send(new TextEncoder().encode('N|ENG_REQUIRED'));
+  assert.match(r.elements.get('detail').textContent, /вручную/);
 });
