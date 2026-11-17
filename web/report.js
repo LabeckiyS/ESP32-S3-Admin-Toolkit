@@ -48,7 +48,7 @@ function formatTechnicalReport(data) {
     sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
     sectionList('Оперативная память',data.ram,(r,i)=>{item(i,r.DeviceLocator);details([['Объём',bytes(r.CapacityBytes)],['МГц',r.Speed]]);});
     sectionList('Накопители',data.disks,(r,i)=>{item(i,r.Model);field('Размер',bytes(r.SizeBytes));});
-    sectionList('Разделы',data.volumes,(r,i)=>{item(i,r.DeviceID);details([['Размер',bytes(r.SizeBytes)],['Свободно',bytes(r.FreeBytes]]);});
+    sectionList('Разделы',data.volumes,(r,i)=>{item(i,r.DeviceID);details([['Размер',bytes(r.SizeBytes)],['Свободно',bytes(r.FreeBytes)]]);});
     sectionList('Видеокарты',data.gpu,(r,i)=>item(i,r.Name));
     section('Физические сетевые адаптеры (MAC / IP / DNS)');
     const nics=array(network.adapters),ips=array(network.ipConfig);
