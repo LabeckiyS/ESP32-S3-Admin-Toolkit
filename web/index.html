@@ -12,7 +12,7 @@
 <main>
   <header>
     <div class="eyebrow">ESP32-S3 / BLE-ONLY</div>
-    <h1>Admin Toolkit <span>v0.3.3</span></h1>
+    <h1>Admin Toolkit <span>v0.3.4</span></h1>
     <p>Беспроводная клавиатура, мышь и диагностика Windows в одной панели.</p>
     <p><a class="installer-link" href="./install.html">Установить или обновить прошивку через USB</a></p>
   </header>
@@ -72,14 +72,14 @@
   <div id="diagnostics-panel" hidden>
     <section class="card">
       <h2>Диагностика Windows</h2>
-      <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК. Укажи текущую раскладку и нажми «Старт».</p>
-      <label class="inline-label layout-selector" for="pc-layout">Текущая раскладка на ПК:
+      <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК. Устройство не меняет язык Windows автоматически.</p>
+      <label class="inline-label layout-selector" for="pc-layout">Раскладка, выбранная на компьютере:
         <select id="pc-layout" class="layout-select">
-          <option value="ru" selected>RUS — переключить на ENG</option>
-          <option value="en">ENG — запуск без переключения</option>
+          <option value="ru" selected>RUS — сначала вручную выбрать ENG</option>
+          <option value="en">ENG — запустить диагностику</option>
         </select>
       </label>
-      <p class="muted small">Автопереключение рассчитано на стандартную пару RUS/ENG. Если раскладок больше двух, выбери ENG вручную и укажи ENG здесь.</p>
+      <p class="muted small">При RUS запуск заблокирован во избежание ошибочного ввода команды. Переключи раскладку на самом ПК, затем выбери ENG здесь. Автоматического Win+Space нет.</p>
       <div class="toolbar wrap"><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
       <div class="muted small" id="detail">Компьютер пока не обследован.</div>
