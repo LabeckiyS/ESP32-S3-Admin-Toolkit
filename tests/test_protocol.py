@@ -71,3 +71,17 @@ class KeyboardLayoutContractTests(unittest.TestCase):
         self.assertNotIn("KEY_LEFT_GUI, ' '", launch)
         self.assertNotIn("keyboard.press(' ')", launch)
         self.assertIn('typeAscii("powershell.exe', launch)
+
+class ModeContractTests(unittest.TestCase):
+    def test_fast_and_full_are_separate_entrypoints(self):
+        root = Path(__file__).resolve().parents[1]
+        collector = (root / 'collectors/windows/Collect-Inventory.ps1').read_text(encoding='utf-8')
+        self.assertIn('function Get-QuickInventory', collector)
+        self.assertIn('function Get-Inventory', collector)
+        self.assertIn("if ($Mode -eq 'Fast')", collector)
+        self.assertIn('Get-NetAdapter -Physical', collector)
+        self.assertIn('Win32_NetworkAdapterConfiguration', collector)
+        firmware = (root / 'firmware/src/main.cpp').read_text(encoding='utf-8')
+        self.assertIn('RUN|EN|FULL', firmware)
+        self.assertIn('RUN|EN|FAST', firmware)
+        self.assertIn('|W4', firmware)
