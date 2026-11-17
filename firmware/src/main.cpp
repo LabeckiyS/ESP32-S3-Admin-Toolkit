@@ -34,7 +34,7 @@ constexpr size_t kChunk = 64;         // USB payload bytes per stop-and-wait lin
 constexpr size_t kBleChunk = 16;      // 1(type)+2(seq)+16(payload) <= ATT MTU 23
 constexpr uint32_t kAckTimeout = 1600;
 constexpr uint8_t kBleWindow = 4; // Cumulative ACK once per four 16-byte notifications
-constexpr uint32_t kBleInterval = 35; // BLE resend when app acknowledgment is absent
+constexpr uint32_t kBleInterval = 35; // Pace BLE notifications in a window
 constexpr uint8_t kMaxRetries = 8;
 constexpr int kBtn = 0;
 constexpr int kTftCs = 4, kTftDc = 2, kTftRst = 1;
@@ -589,7 +589,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.3.8");
+    display.print("  v0.4.0");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");
