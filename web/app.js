@@ -62,10 +62,11 @@ function onFrame(event) {
       current.seq++;
       progress(current.received, current.size);
       $('detail').textContent = `${current.received} / ${current.size} байт · пакет ${seq}`;
-      queueCommand('A|' + seq).catch(err => { log('ACK: ' + err.message); });
-    } else if (seq === current.seq - 1) {
-      // Device retried because it did not receive our previous ACK.
-      queueCommand('A|' + seq).catch(() => {});
+      if (seq % current.window === current.window - 1 || current.received === current.size)
+        queueCommand('A|' + seq).catch(err => { log('ACK: ' + err.message); });
+    } else if (seq < current.seq) {
+      // Duplicate from a retransmitted window: ACK most recent contiguous packet.
+      queueCommand('A|' + (current.seq - 1)).catch(() => {});
     } else {
       log(`Неверный порядок BLE-пакетов: ${seq}, ожидался ${current.seq}`);
     }
@@ -84,7 +85,7 @@ function onFrame(event) {
     if (!Number.isSafeInteger(size) || size < 1 || size > 65536 || !/^[0-9a-f]{1,8}$/i.test(fields[2] || '')) {
       log('ESP32 прислала неверные параметры отчёта'); return;
     }
-    current = { size, crc, parts: [], received: 0, seq: 0 };
+    current = { size, crc, parts: [], received: 0, seq: 0, window: fields[3] === 'W4' ? 4 : 1 };
     progress(0, size); ui();
     log(`Передача началась: ${size} байт, CRC32 ${fields[2].toUpperCase()}`);
     queueCommand('START').catch(err => log('START: ' + err.message));
@@ -194,8 +195,9 @@ $('run').addEventListener('click', async () => {
     return;
   }
   try {
-    await queueCommand('RUN|EN');
-    log('Старт: ESP32 открывает PowerShell без переключения раскладки.');
+    const mode = $('scan-mode').value === 'full' ? 'FULL' : 'FAST';
+    await queueCommand('RUN|EN|' + mode);
+    log('Старт ' + (mode === 'FAST' ? 'быстрой инвентаризации' : 'расширенной диагностики') + ': PowerShell, ENG.');
   } catch (err) { log('RUN: ' + err.message); }
 });
 $('get').addEventListener('click', async () => {
