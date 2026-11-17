@@ -66,7 +66,7 @@ class KeyboardLayoutContractTests(unittest.TestCase):
         self.assertIn('s == "RUN" || s == "RUN|EN"', source)
         self.assertIn('requestEnglishRequired = true;', source)
         self.assertIn('notifyText("N|ENG_REQUIRED");', source)
-        launch = source[source.index("void launchCollector()") : source.index("void pollTransfer()")]
+        launch = source[source.index("void launchCollector(bool full)") : source.index("void pollTransfer()")]
         self.assertNotIn("selectEnglishIfRussian", source)
         self.assertNotIn("KEY_LEFT_GUI, ' '", launch)
         self.assertNotIn("keyboard.press(' ')", launch)
