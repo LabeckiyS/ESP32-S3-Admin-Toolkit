@@ -7,6 +7,10 @@ function formatTechnicalReport(data) {
     if (x === null || x === undefined || x === '') return 'не определено';
     if (x === true) return 'да';
     if (x === false) return 'нет';
+    if (typeof x === 'string') {
+      const ms = /^\/Date\((\d+)(?:[+-]\d+)?\)\/$/.exec(x);
+      if (ms) return new Date(Number(ms[1])).toLocaleString('ru-RU');
+    }
     if (typeof x === 'object') return x.unavailable ? 'нет доступа / запрос не поддержан' : 'не определено';
     return String(x);
   };
@@ -17,7 +21,7 @@ function formatTechnicalReport(data) {
   const section = (title) => { add(''); add('=== ' + title.toUpperCase() + ' ==='); };
   const item = (i, title) => add('  ' + (i + 1) + '. ' + val(title));
   const unavailable = (x, text) => {
-    if (x && x.unavailable) { add(text + ': нет доступа / запрос не поддержан'); return true; }
+    if (x && x.unavailable) { add(text + ': недоступно' + (x.errorType ? ' (' + x.errorType + ')' : '')); return true; }
     return false;
   };
   const details = (entries) => { for (const [name, v] of entries) add('     ' + name + ': ' + val(v)); };
@@ -28,6 +32,49 @@ function formatTechnicalReport(data) {
     if (!xs.length) { add('Записей нет / данные не получены'); return; }
     xs.forEach((v, i) => makeItem(object(v), i));
   };
+
+  if (data.mode === 'fast') {
+    const sys=object(data.system),os=object(sys.os),machine=object(sys.machine);
+    const board=object(sys.mainboard),network=object(data.network),access=object(data.localAccess),sec=object(data.security);
+    add('БЫСТРАЯ ИНВЕНТАРИЗАЦИЯ ПК');
+    add('========================');
+    field('Имя ПК',sys.computerName);
+    field('Дата UTC',data.collectedAt);
+    field('Windows',os.caption);
+    field('Сборка',os.build);
+    field('Домен',machine.domainJoined);
+    field('Материнская плата',[board.manufacturer,board.product].filter(Boolean).join(' '));
+    field('ОЗУ всего',bytes(machine.totalMemory));
+    sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
+    sectionList('Оперативная память',data.ram,(r,i)=>{item(i,r.DeviceLocator);details([['Объём',bytes(r.CapacityBytes)],['МГц',r.Speed]]);});
+    sectionList('Накопители',data.disks,(r,i)=>{item(i,r.Model);field('Размер',bytes(r.SizeBytes));});
+    sectionList('Разделы',data.volumes,(r,i)=>{item(i,r.DeviceID);details([['Размер',bytes(r.SizeBytes)],['Свободно',bytes(r.FreeBytes]]);});
+    sectionList('Видеокарты',data.gpu,(r,i)=>item(i,r.Name));
+    section('Физические сетевые адаптеры (MAC / IP / DNS)');
+    const nics=array(network.adapters),ips=array(network.ipConfig);
+    if(unavailable(network.adapters,'Сетевые карты') || unavailable(network.ipConfig,'IP/DNS')) {
+      add('Проверь блок сети на ПК и уточни причину ошибки запроса.');
+    }
+    nics.forEach((r,i)=>{
+      item(i,r.Name);
+      const ip=object(ips.find(x=>x.interfaceAlias===r.Name));
+      details([['Устройство',r.InterfaceDescription],['MAC',r.MacAddress],['Состояние',r.Status],
+        ['IPv4',array(ip.ipv4).join(', ')||'не получен'],['Шлюз',array(ip.gateway).join(', ')||'—'],
+        ['DNS',array(ip.dns).join(', ')||'—'],['DHCP',ip.dhcp],['Скорость',r.LinkSpeed]]);
+    });
+    section('Локальные администраторы');
+    const group=object(object(access.groups).administrators);
+    if (unavailable(object(access.groups).administrators,'Группа')) {}
+    else array(group.members).forEach((r,i)=>item(i,r.Name||r.name));
+    section('Защита');
+    sectionList('Брандмауэр Windows',sec.firewall,(r,i)=>{item(i,r.Name);field('Включён',r.Enabled);});
+    const defender=object(sec.defender);
+    if(!unavailable(sec.defender,'Defender'))field('Защита в реальном времени',defender.RealTimeProtectionEnabled);
+    add('');
+    add('Только инвентаризация: тесты SSD SMART и полноценный аудит прав не проводились.');
+    add('Без BLE-аутентификации не передавай секретные корпоративные сведения.');
+    return lines.join('\n');
+  }
   const sys = object(data.system), machine = object(sys.machine), os = object(sys.os);
   const bios = object(sys.bios), board = object(sys.mainboard);
   add('ТЕХНИЧЕСКИЙ ПАСПОРТ КОМПЬЮТЕРА');
@@ -82,7 +129,7 @@ function formatTechnicalReport(data) {
     details([['IPv4',array(r.ipv4).join(', ')||'—'],
       ['IPv6',array(r.ipv6).join(', ')||'—'],
       ['Шлюз',array(r.gateway).join(', ')||'—'],
-      ['DNS',array(r.dns).join(', ')||'—']]);
+      ['DNS',array(r.dns).join(', ')||'—'],['DHCP',r.dhcp]]);
   });
   sectionList('Профили сети', object(data.network).profiles, (r,i) => {
     item(i, r.InterfaceAlias);
