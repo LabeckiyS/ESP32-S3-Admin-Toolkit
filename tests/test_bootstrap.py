@@ -13,6 +13,20 @@ MAIN = ROOT / 'firmware/src/main.cpp'
 WEB = ROOT / 'web/app.js'
 
 class BootstrapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Simulate PlatformIO's prebuild hook; this tests the exact embedded
+        # snapshot that firmware compilation will use, not a stale checked-in header.
+        class FakeEnv:
+            def subst(self, key):
+                if key != '$PROJECT_DIR':
+                    raise ValueError(key)
+                return str(ROOT / 'firmware')
+        script = ROOT / 'firmware/extra_scripts/embed_collector.py'
+        scope = {'Import': lambda name: None, 'env': FakeEnv(), '__file__': str(script)}
+        exec(compile(script.read_text('utf-8'), str(script), 'exec'), scope)
+
+
     def test_pinned_collector_is_the_actual_file(self):
         text = HEADER.read_text('utf-8')
         block = text.split('kCollectorBase64[] PROGMEM =', 1)[1].split(';', 1)[0]
@@ -74,16 +88,16 @@ class BootstrapTests(unittest.TestCase):
     def test_hid_only_runs_after_explicit_run_command(self):
         text = MAIN.read_text('utf-8')
         self.assertIn('s == "RUN|RU"', text)
-        self.assertIn('s == "RUN" || s == "RUN|EN"', text)
-        self.assertIn('void launchCollector()', text)
+        self.assertIn('s == "RUN" || s == "RUN|EN" || s == "RUN|EN|FAST"', text)
+        self.assertIn('void launchCollector(bool full)', text)
         self.assertIn('requestEnglishRequired = true;', text)
         self.assertIn('notifyText("N|ENG_REQUIRED");', text)
         self.assertNotIn('selectEnglishIfRussian', text)
-        self.assertIn('launchCollector();', text)
+        self.assertIn('launchCollector(full);', text)
         setup = text[text.index('void setup()') : text.index('void loop()')]
-        self.assertNotIn('launchCollector();', setup)
+        self.assertNotIn('launchCollector(full);', setup)
         web = WEB.read_text('utf-8')
-        self.assertIn("queueCommand('RUN|EN')", web)
+        self.assertIn("queueCommand('RUN|EN|' + mode)", web)
         self.assertNotIn("queueCommand(fromRussian", web)
         self.assertIn("if ($('pc-layout').value !== 'en')", web)
 
