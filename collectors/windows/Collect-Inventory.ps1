@@ -23,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 
 function Capture([scriptblock]$Action) {
     try { return (& $Action) }
-    catch { return @{ unavailable = $true; reason = 'Access denied, unsupported or query failed' } }
+    catch { return @{ unavailable = $true; reason = 'Query failed'; category = [string]$_.CategoryInfo.Category; errorType = $_.Exception.GetType().Name } }
 }
 # All local group lookups use invariant SIDs, so they work on RU/EN Windows.
 function Get-LocalAccessAudit {
@@ -142,7 +142,10 @@ function Get-Inventory {
     }
     $pnp = Capture {
         $all = @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Sort-Object Class, FriendlyName)
-        $selected = @($all | Select-Object -First $MaxPnpDevices | ForEach-Object {
+        $wanted = @('DiskDrive','Display','Net','Monitor','Ports','Bluetooth','Firmware')
+        $focus = @($all | Where-Object { $_.Status -ne 'OK' -or $_.Class -in $wanted } |
+          Sort-Object Class, FriendlyName -Unique | Select-Object -First $MaxPnpDevices)
+        $selected = @($focus | ForEach-Object {
             [ordered]@{
                 class = $_.Class
                 name = $_.FriendlyName
@@ -151,19 +154,26 @@ function Get-Inventory {
                 instanceId = if ($IncludeSerialNumbers) { $_.InstanceId } else { $null }
             }
         })
-        [ordered]@{ total = $all.Count; included = $selected.Count; truncated = ($all.Count -gt $MaxPnpDevices); devices = $selected }
+        [ordered]@{ total = $all.Count; included = $selected.Count; truncated = ($all.Count -gt $selected.Count); devices = $selected }
     }
+    # Keep only physical adapters; IP comes from the CIM adapter configuration.
     $adapters = Capture {
-        @(Get-NetAdapter -IncludeHidden -ErrorAction Stop | Select-Object -First 24 Name, InterfaceDescription, Status, MacAddress, LinkSpeed, HardwareInterface, ifIndex)
+        @(Get-NetAdapter -Physical -ErrorAction Stop | Sort-Object Name | Select-Object -First 8 Name, InterfaceDescription, Status, MacAddress, LinkSpeed, HardwareInterface, ifIndex)
     }
     $ipConfig = Capture {
-        @(Get-NetIPConfiguration -ErrorAction Stop | ForEach-Object {
+        $nics = @(Get-NetAdapter -Physical -ErrorAction Stop | Sort-Object Name | Select-Object -First 8)
+        $cfgs = @(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -ErrorAction Stop)
+        @($nics | ForEach-Object {
+            $nic = $_
+            $m = @($cfgs | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex })
+            $c = if ($m.Count) { $m[0] } else { $null }
             [ordered]@{
-                interfaceAlias = $_.InterfaceAlias
-                ipv4 = @($_.IPv4Address | ForEach-Object IPAddress)
-                ipv6 = @($_.IPv6Address | ForEach-Object IPAddress)
-                gateway = @($_.IPv4DefaultGateway | ForEach-Object NextHop)
-                dns = if ($null -ne $_.DNSServer) { @($_.DNSServer.ServerAddresses) } else { @() }
+                interfaceAlias = [string]$nic.Name
+                ipv4 = if ($null -ne $c) { @($c.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' }) } else { @() }
+                ipv6 = if ($null -ne $c) { @($c.IPAddress | Where-Object { $_ -match ':' }) } else { @() }
+                gateway = if ($null -ne $c) { @($c.DefaultIPGateway | Where-Object { $_ }) } else { @() }
+                dns = if ($null -ne $c) { @($c.DNSServerSearchOrder | Where-Object { $_ }) } else { @() }
+                dhcp = if ($null -ne $c) { [bool]$c.DHCPEnabled } else { $null }
             }
         })
     }
@@ -188,8 +198,8 @@ function Get-Inventory {
             Sort-Object DisplayName, DisplayVersion -Unique)
         [ordered]@{
             total=$all.Count
-            truncated=($all.Count -gt 45)
-            items=@($all | Select-Object -First 45 |
+            truncated=($all.Count -gt 25)
+            items=@($all | Select-Object -First 25 |
                 Select-Object DisplayName, DisplayVersion, Publisher, InstallDate)
         }
     }
@@ -230,7 +240,8 @@ function Get-Inventory {
 
     return [ordered]@{
         schemaVersion = 1
-        collectorVersion = '0.3.8'
+        collectorVersion = '0.4.0'
+        mode = 'full'
         collectedAt = (Get-Date).ToUniversalTime().ToString('o')
         system = $system
         localAccess = Get-LocalAccessAudit
