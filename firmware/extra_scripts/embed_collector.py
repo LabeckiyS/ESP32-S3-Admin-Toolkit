@@ -31,7 +31,7 @@ bootstrap = (
     # Windows PowerShell 5.1 decodes BOM-less .ps1 in the local ANSI code page.
     # Keep the SHA-256 check on the original source bytes and add UTF-8 BOM on disk.
     "[IO.File]::WriteAllBytes($f,([byte[]]@(239,187,191)+$a));"
-    "& $f -Port $p -OpenSerial $s -OutputDirectory (Join-Path $env:TEMP 'AdminToolkit-Reports') -MaxPnpDevices 80"
+    "& $f -Port $p -OpenSerial $s -MaxPnpDevices 80"
     "}finally{$s.Dispose()}"
 )
 if not bootstrap.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:

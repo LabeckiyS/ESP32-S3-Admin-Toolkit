@@ -20,3 +20,6 @@ textarea{width:100%;max-width:100%;resize:vertical;background:#0a111d;color:#e7e
 /* Diagnostic host keyboard selection; never overflows small Android screens. */
 .layout-selector{display:flex;align-items:flex-start;flex-wrap:wrap;gap:9px;margin:11px 0;max-width:100%}
 .layout-select{font:inherit;max-width:100%;min-width:0;background:#0a111d;color:#e7eefb;border:1px solid #334867;border-radius:9px;padding:9px 10px}
+
+/* Plain, selectable technical passport; text is not a download. */
+#report-text{display:block;width:100%;min-height:55vh;max-height:70vh;resize:vertical;overflow:auto;white-space:pre;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}

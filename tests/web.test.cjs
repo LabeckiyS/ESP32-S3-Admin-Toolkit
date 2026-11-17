@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../web/app.js'), 'utf8');
+const reportSource = fs.readFileSync(path.join(__dirname, '../web/report.js'), 'utf8');
 function makeRuntime() {
   const elements = new Map();
   function element() {
@@ -30,6 +31,7 @@ function makeRuntime() {
     setTimeout, Date, writes
   };
   vm.createContext(env);
+  vm.runInContext(reportSource, env);
   vm.runInContext(source, env);
   vm.runInContext('rx = {writeValueWithResponse: async payload => writes.push(new TextDecoder().decode(payload))}', env);
   const frame = bytes => ({ target: {value: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)} });
@@ -118,4 +120,17 @@ test('BLE connection button reflects connected state and allows disconnect', () 
   assert.equal(r.elements.get('connect').textContent, 'Подключить ESP32');
   assert.equal(r.elements.get('status').textContent, 'Не подключено');
   assert.equal(r.elements.get('run').disabled, true);
+});
+
+
+test('Technical passport displays copyable text, without download controls', () => {
+  const r = makeRuntime();
+  r.get("showReport({schemaVersion:2,collectorVersion:'0.3.8',system:{computerName:'TEST-01'},network:{adapters:[{Name:'Ethernet',MacAddress:'AA-BB-CC-DD-EE-FF'}]},localAccess:{localUsers:[{name:'user',enabled:true,passwordRequired:true}],groups:{administrators:{total:1,members:[{name:'TEST-01\\\\Administrator'}]}}}})");
+  const text = r.elements.get('report-text').value;
+  assert.match(text,/TEST-01/);
+  assert.match(text,/AA-BB-CC-DD-EE-FF/);
+  assert.match(text,/Пароль обязателен: да/);
+  assert.match(text,/локальной группы Администраторы/i);
+  assert.match(source,/formatTechnicalReport/);
+  assert.ok(!source.includes('createObjectURL'));
 });

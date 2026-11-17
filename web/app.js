@@ -124,40 +124,10 @@ function finishReport() {
     $('detail').textContent = `Проверен CRC32 · ${t.size} байт · данные получены`; log('Отчёт получен и проверен.');
   } catch (err) { log('Ошибка JSON: ' + err.message); }
 }
-function nice(value) {
-  if (value == null) return '—';
-  if (typeof value === 'object') return '—';
-  return String(value);
-}
 function showReport(data) {
+  $('report-text').value = formatTechnicalReport(data);
+  $('copy-status').textContent = '';
   $('summary').hidden = false;
-  const system = data.system || {};
-  const m = system.machine || {};
-  const o = system.os || {};
-  const cpu = Array.isArray(data.cpu) ? data.cpu[0] : (data.cpu && !data.cpu.unavailable ? data.cpu : null);
-  const metrics = [
-    ['Компьютер', system.computerName],
-    ['Windows', o.caption],
-    ['Модель', m.model],
-    ['Процессор', cpu && cpu.Name],
-    ['RAM', Number.isFinite(m.totalMemory) ? (m.totalMemory / 1073741824).toFixed(1) + ' ГБ' : '—'],
-    ['Время сбора', data.collectedAt]
-  ];
-  $('metrics').replaceChildren();
-  for (const [label, value] of metrics) {
-    const card = document.createElement('div'); card.className = 'metric';
-    const b = document.createElement('b'); b.textContent = nice(value);
-    const span = document.createElement('span'); span.textContent = label;
-    card.append(b, span); $('metrics').append(card);
-  }
-  $('stamp').textContent = 'Схема данных: ' + nice(data.schemaVersion) + ' · Сборщик: ' + nice(data.collectorVersion);
-  $('sections').replaceChildren();
-  for (const [key, value] of Object.entries(data)) {
-    const d = document.createElement('details'); d.className = 'report-block';
-    const s = document.createElement('summary'); s.textContent = key;
-    const p = document.createElement('pre'); p.textContent = JSON.stringify(value, null, 2);
-    d.append(s, p); $('sections').append(d);
-  }
 }
 function disconnect() {
   if (tx?.removeEventListener) tx.removeEventListener('characteristicvaluechanged', onFrame);
@@ -195,12 +165,6 @@ async function connect() {
     connecting = false;
     ui();
   }
-}
-function download(content, filename, mime) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 // Default tab is always the keyboard, independent of the previous visit.
 function selectTab(name) {
@@ -242,15 +206,23 @@ $('cancel').addEventListener('click', async () => {
   try { await queueCommand('STOP'); } catch (err) { log('STOP: ' + err.message); }
   current = null; ui();
 });
-$('json').addEventListener('click', () => {
-  if (report) download(report.bytes, (report.object.system?.computerName || 'pc') + '.json', 'application/json;charset=utf-8');
-});
 $('copy-report').addEventListener('click', async () => {
-  if (!report) return;
-  try { await navigator.clipboard.writeText(JSON.stringify(report.object, null, 2)); log('Отчёт скопирован.'); }
-  catch (err) { log('Не удалось скопировать отчёт: ' + err.message); }
-});
-$('txt').addEventListener('click', () => {
-  if (report) download(JSON.stringify(report.object, null, 2), (report.object.system?.computerName || 'pc') + '.txt', 'text/plain;charset=utf-8');
+  const field = $('report-text');
+  if (!field.value) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API не предоставлен');
+    await navigator.clipboard.writeText(field.value);
+    $('copy-status').textContent = 'Отчёт скопирован в буфер обмена.';
+  } catch (error) {
+    // Android Chrome lets users manually select the contents of readonly textarea.
+    // Legacy fallback stays inside the real user click, not in an async background task.
+    field.focus();
+    field.select();
+    let copied = false;
+    try { copied = !!document.execCommand?.('copy'); } catch {}
+    $('copy-status').textContent = copied
+      ? 'Отчёт скопирован.'
+      : 'Выделен весь текст. Нажми «Копировать» в меню выделения Android.';
+  }
 });
 ui();

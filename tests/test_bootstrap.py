@@ -60,6 +60,17 @@ class BootstrapTests(unittest.TestCase):
             self.assertIn(wait, source)
         self.assertIn('pollAdvertisingRecovery();', source)
 
+    def test_collector_audits_local_access_without_secrets_or_reports_on_disk(self):
+        source = SOURCE.read_text('utf-8')
+        for expected in ('Get-LocalUser', 'Get-LocalGroupMember -SID', 'S-1-5-32-544',
+                         'S-1-5-32-545', 'PasswordRequired', 'PasswordLastSet',
+                         'MacAddress', 'Get-PnpDevice -PresentOnly', 'Get-HotFix',
+                         'Get-BitLockerVolume', 'Get-Tpm', 'Confirm-SecureBootUEFI'):
+            self.assertIn(expected, source)
+        self.assertNotIn('WriteAllText($txtPath', source)
+        self.assertNotIn('WriteAllBytes($jsonPath', source)
+        self.assertNotIn('Get-WmiObject Win32_Product', source)
+
     def test_hid_only_runs_after_explicit_run_command(self):
         text = MAIN.read_text('utf-8')
         self.assertIn('s == "RUN|RU"', text)

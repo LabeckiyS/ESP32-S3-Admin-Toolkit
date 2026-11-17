@@ -6,13 +6,13 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Admin Toolkit S3 — клавиатура и диагностика</title>
-<link rel="stylesheet" href="style.css?v=038">
+<link rel="stylesheet" href="style.css?v=039">
 </head>
 <body>
 <main>
   <header>
     <div class="eyebrow">ESP32-S3 / BLE-ONLY</div>
-    <h1>Admin Toolkit <span>Web v0.3.8</span></h1>
+    <h1>Admin Toolkit <span>Web v0.3.9</span></h1>
     <p>Беспроводная клавиатура, мышь и диагностика Windows в одной панели.</p>
     <p><a class="installer-link" href="./install.html">Установить или обновить прошивку через USB</a></p>
   </header>
@@ -84,16 +84,19 @@
       <div class="muted small" id="detail">Компьютер пока не обследован.</div>
     </section>
     <section class="card" id="summary" hidden>
-      <h2>Технический паспорт ПК</h2><div class="metrics" id="metrics"></div><p class="muted small" id="stamp"></p>
-      <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать</button><button id="txt" class="secondary">Скачать TXT</button><button id="json" class="secondary">Скачать JSON</button></div>
-      <h2>Разделы отчёта</h2><div id="sections"></div>
+      <h2>Технический отчёт ПК</h2>
+      <p class="muted small">Отчёт представлен обычным текстом. Можно выделить его вручную или нажать кнопку копирования. Скачивание файлов не используется.</p>
+      <textarea id="report-text" readonly rows="22" spellcheck="false" aria-label="Полный технический отчёт для копирования"></textarea>
+      <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать весь отчёт</button></div>
+      <p class="muted small" id="copy-status" role="status"></p>
     </section>
     <section class="card"><h2>Журнал диагностики</h2><pre id="log" aria-live="polite">Ожидается подключение устройства.</pre></section>
     <p class="foot">Диагностика запускается только кнопкой «Старт» на разблокированном компьютере. PowerShell открывается видимо и может быть заблокирован корпоративными политиками. Без PIN/BLE pairing передавай только тестовые несекретные данные.</p>
   </div>
   <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
-<script src="app.js?v=038" defer></script>
-<script src="keyboard.js?v=038" defer></script>
+<script src="report.js?v=039" defer></script>
+<script src="app.js?v=039" defer></script>
+<script src="keyboard.js?v=039" defer></script>
 </body>
 </html>
