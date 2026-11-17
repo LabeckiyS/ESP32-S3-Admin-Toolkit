@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.6
+ * ESP32-S3 Admin Toolkit, firmware 0.3.7
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -50,6 +50,9 @@ BLECharacteristic *bleTx = nullptr;
 BLEAdvertising *advertising = nullptr;
 volatile bool bleConnected = false;
 volatile bool needAdvertise = false;
+volatile uint32_t bleDisconnectedAtMs = 0;
+volatile uint8_t bleAdvertiseAttempts = 0;
+uint32_t lastAdvertiseAttemptMs = 0;
 volatile bool requestGet = false;
 volatile bool requestStart = false;
 volatile bool requestStop = false;
@@ -220,8 +223,20 @@ void pollUsb() {
 }
 
 class ServerEvents : public BLEServerCallbacks {
-  void onConnect(BLEServer *) override { bleConnected = true; }
-  void onDisconnect(BLEServer *) override { bleConnected = false; needAdvertise = true; if (hidQueue) xQueueReset(hidQueue); utf8Lead = 0; }
+  void onConnect(BLEServer *) override {
+    bleConnected = true;
+    needAdvertise = false;
+    bleAdvertiseAttempts = 0;
+  }
+  void onDisconnect(BLEServer *) override {
+    bleConnected = false;
+    // Restart after GAP disconnect settles; keep callback non-blocking.
+    bleDisconnectedAtMs = millis();
+    bleAdvertiseAttempts = 0;
+    needAdvertise = true;
+    if (hidQueue) xQueueReset(hidQueue);
+    utf8Lead = 0;
+  }
 };
 class RxEvents : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *c) override {
@@ -456,6 +471,23 @@ void launchCollector() {
   hidBusy = false;
 }
 
+void pollAdvertisingRecovery() {
+  if (bleConnected || !needAdvertise) return;
+  const uint32_t now = millis();
+  const uint8_t attempt = bleAdvertiseAttempts;
+  // The first retry is delayed by 500 ms; subsequent retries run every
+  // 3 and 10 seconds. An already-active advertising request can log a
+  // benign warning in the Arduino-ESP32 2.0 BLE stack.
+  const uint32_t waitMs = (attempt == 0) ? 500UL :
+                          (attempt == 1) ? 3000UL : 10000UL;
+  const uint32_t sinceMs = (attempt == 0) ? bleDisconnectedAtMs : lastAdvertiseAttemptMs;
+  if (static_cast<uint32_t>(now - sinceMs) < waitMs) return;
+  if (attempt == 0) stopTransfer();
+  if (advertising) advertising->start();
+  lastAdvertiseAttemptMs = now;
+  if (bleAdvertiseAttempts < 3) ++bleAdvertiseAttempts;
+}
+
 void pollTransfer() {
   if (!bleConnected) { if (transferActive) stopTransfer(); return; }
   if (requestStop) { requestStop = false; stopTransfer(); }
@@ -532,7 +564,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.3.6");
+    display.print("  v0.3.7");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");
@@ -578,6 +610,10 @@ void setup() {
   hidQueue = xQueueCreate(48, sizeof(InputPacket));
   keyboard.begin();
   mouse.begin();
+  // Windows can toggle CDC DTR/RTS while disposing the open COM port.
+  // Prevent TinyUSB from interpreting that handshake as a reboot command.
+  // Manual BOOT + reconnect still enters the USB firmware downloader.
+  Serial.enableReboot(false);
   USB.begin();
   Serial.begin(115200);
   usbLine.reserve(280);
@@ -611,11 +647,7 @@ void loop() {
     requestRun = false;
     launchCollector();
   }
-  if (needAdvertise) {
-    needAdvertise = false;
-    stopTransfer();
-    if (advertising) advertising->start();
-  }
+  pollAdvertisingRecovery();
   pollTransfer();
   renderDisplay();
   delay(2);

@@ -45,6 +45,21 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('-OpenSerial $s', embedded)
         self.assertIn('}finally{$s.Dispose()}', embedded)
 
+    def test_cdc_close_cannot_trigger_bootloader(self):
+        source = MAIN.read_text('utf-8')
+        setup = source[source.index('void setup() {'):source.index('void loop() {')]
+        self.assertIn('Serial.enableReboot(false);', setup)
+        self.assertLess(setup.index('Serial.enableReboot(false);'), setup.index('USB.begin();'))
+        self.assertNotIn('Serial.enableReboot(true)', source)
+
+    def test_ble_advertising_recovers_after_disconnect(self):
+        source = MAIN.read_text('utf-8')
+        self.assertIn('void pollAdvertisingRecovery()', source)
+        self.assertIn('bleDisconnectedAtMs = millis();', source)
+        for wait in ('500UL', '3000UL', '10000UL'):
+            self.assertIn(wait, source)
+        self.assertIn('pollAdvertisingRecovery();', source)
+
     def test_hid_only_runs_after_explicit_run_command(self):
         text = MAIN.read_text('utf-8')
         self.assertIn('s == "RUN|RU"', text)
