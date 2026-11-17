@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Admin Toolkit S3 — клавиатура и диагностика</title>
-<link rel="stylesheet" href="style.css?v=039">
+<link rel="stylesheet" href="style.css?v=040">
 </head>
 <body>
 <main>
@@ -70,7 +70,7 @@
 
   <div id="diagnostics-panel" hidden>
     <section class="card">
-      <h2>Диагностика Windows</h2>
+      <h2>Диагностика Windows · v0.4.0</h2>
       <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК. Устройство не меняет язык Windows автоматически.</p>
       <label class="inline-label layout-selector" for="pc-layout">Раскладка, выбранная на компьютере:
         <select id="pc-layout" class="layout-select">
@@ -79,7 +79,14 @@
         </select>
       </label>
       <p class="muted small">При RUS запуск заблокирован во избежание ошибочного ввода команды. Переключи раскладку на самом ПК, затем выбери ENG здесь. Автоматического Win+Space нет.</p>
-      <div class="toolbar wrap"><button id="run" disabled>Старт диагностики</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
+      <label class="inline-label layout-selector" for="scan-mode">Режим проверки:
+        <select id="scan-mode" class="layout-select">
+          <option value="fast" selected>Быстрая инвентаризация — основные характеристики, IP/MAC</option>
+          <option value="full">Расширенная диагностика — ПО, устройства, ошибки и безопасность</option>
+        </select>
+      </label>
+      <p class="muted small">Быстрая проверка не запрашивает подробные списки PnP, программ, служб и журналов Windows. Расширенная передаёт больше данных.</p>
+      <div class="toolbar wrap"><button id="run" disabled>Старт проверки</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
       <div class="muted small" id="detail">Компьютер пока не обследован.</div>
     </section>
@@ -95,8 +102,8 @@
   </div>
   <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
-<script src="report.js?v=039" defer></script>
-<script src="app.js?v=039" defer></script>
-<script src="keyboard.js?v=039" defer></script>
+<script src="report.js?v=040" defer></script>
+<script src="app.js?v=040" defer></script>
+<script src="keyboard.js?v=040" defer></script>
 </body>
 </html>
