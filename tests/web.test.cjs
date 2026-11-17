@@ -107,3 +107,15 @@ test('ESP32 rejects outdated RUN|RU commands without changing Windows language',
   r.send(new TextEncoder().encode('N|ENG_REQUIRED'));
   assert.match(r.elements.get('detail').textContent, /вручную/);
 });
+
+
+test('BLE connection button reflects connected state and allows disconnect', () => {
+  const r = makeRuntime();
+  r.get("status('Подключено к AdminToolkit-S3', true)");
+  assert.equal(r.elements.get('connect').textContent, 'Отключить ESP32');
+  assert.equal(r.elements.get('status').textContent, 'Подключено к AdminToolkit-S3');
+  r.get('disconnect()');
+  assert.equal(r.elements.get('connect').textContent, 'Подключить ESP32');
+  assert.equal(r.elements.get('status').textContent, 'Не подключено');
+  assert.equal(r.elements.get('run').disabled, true);
+});

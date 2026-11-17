@@ -1,10 +1,8 @@
 'use strict';
 // USB HID keyboard + mouse frontend. Uses the same BLE RX as the diagnostic UI.
 // Packet 0x10 + up to 19 bytes of UTF-8, acknowledged after physical typing.
-const keyboardLog = message => {
-  const el = document.getElementById('keyboard-log');
-  el.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n` + el.textContent.slice(0, 2400);
-};
+// No keyboard journal in the UI; errors remain inspectable in Chrome DevTools.
+const keyboardLog = message => console.info('[Admin Toolkit keyboard] ' + message);
 let keyboardAckResolve = null;
 function onKeyboardAck(success) {
   if (!keyboardAckResolve) return;
@@ -96,28 +94,35 @@ slider.addEventListener('input', () => {
   sliderLabel.textContent = sensitivity.toFixed(1) + '×';
 });
 const pad = document.getElementById('trackpad');
-let down = false, lastX = 0, lastY = 0, accX = 0, accY = 0, moved = false, longClicked = false, longTimer = null;
+// No right-click or other action on long press: explicit mouse buttons below
+// are the only way to send right/middle clicks. A short tap sends left click.
+const MAX_TAP_MS = 350;
+let down = false, lastX = 0, lastY = 0, accX = 0, accY = 0, moved = false, downAt = 0;
 pad.addEventListener('pointerdown', e => {
-  if (!rx || down) return;
-  down = true; moved = false; longClicked = false;
+  if (!rx || down || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  down = true; moved = false; downAt = Date.now();
   accX = accY = 0; lastX = e.clientX; lastY = e.clientY;
   pad.setPointerCapture(e.pointerId);
-  longTimer = setTimeout(() => { if (down && !moved) { longClicked = true; mousePacket('c', 2); } }, 650);
   e.preventDefault();
 });
 pad.addEventListener('pointermove', e => {
   if (!down) return;
   const dx = e.clientX - lastX, dy = e.clientY - lastY;
   lastX = e.clientX; lastY = e.clientY;
-  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { moved = true; clearTimeout(longTimer); }
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) moved = true;
   accX += dx; accY += dy;
+  if (e.cancelable) e.preventDefault();
 });
-pad.addEventListener('pointerup', () => {
+pad.addEventListener('pointerup', e => {
   if (!down) return;
-  down = false; clearTimeout(longTimer);
-  if (!moved && !longClicked) mousePacket('c', 1);
+  down = false;
+  if (!moved && Date.now() - downAt <= MAX_TAP_MS) mousePacket('c', 1);
+  if (pad.hasPointerCapture?.(e.pointerId)) pad.releasePointerCapture(e.pointerId);
+  e.preventDefault();
 });
-pad.addEventListener('pointercancel', () => { down = false; clearTimeout(longTimer); accX = accY = 0; });
+pad.addEventListener('pointercancel', () => { down = false; accX = accY = 0; });
+// Suppress Chrome's own long-press context menu on the touchpad surface.
+pad.addEventListener('contextmenu', e => e.preventDefault());
 setInterval(() => {
   if (!rx) { accX = accY = mousePendingX = mousePendingY = 0; return; }
   if (accX || accY) {

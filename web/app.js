@@ -9,8 +9,15 @@ let writeQueue = Promise.resolve();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const encoder = new TextEncoder();
 function log(message) { $('log').textContent = `[${new Date().toLocaleTimeString()}] ${message}\n` + $('log').textContent.slice(0, 4200); }
-function status(message, connected) { $('status').textContent = message; $('dot').classList.toggle('online', !!connected); }
+let connecting = false;
+function status(message, connected) {
+  $('status').textContent = message;
+  $('dot').classList.toggle('online', !!connected);
+  $('connect').textContent = connected ? 'Отключить ESP32' : 'Подключить ESP32';
+  $('connect').classList.toggle('secondary', !!connected);
+}
 function ui() {
+  $('connect').disabled = connecting;
   // The chosen layout is informational; the dongle never changes Windows language.
   $('run').disabled = !rx || $('pc-layout').value !== 'en';
   $('get').disabled = !rx;
@@ -152,9 +159,24 @@ function showReport(data) {
     d.append(s, p); $('sections').append(d);
   }
 }
-function disconnect() { rx = null; tx = null; current = null; status('Не подключено', false); ui(); log('BLE отключён.'); }
+function disconnect() {
+  if (tx?.removeEventListener) tx.removeEventListener('characteristicvaluechanged', onFrame);
+  if (device?.removeEventListener) device.removeEventListener('gattserverdisconnected', disconnect);
+  if (device?.gatt?.connected) device.gatt.disconnect();
+  device = null;
+  rx = null; tx = null; current = null;
+  connecting = false;
+  if (typeof onKeyboardAck === 'function') onKeyboardAck(false);
+  status('Не подключено', false);
+  ui();
+  log('BLE отключён.');
+}
 async function connect() {
+  if (connecting || rx) return;
   if (!navigator.bluetooth) { log('Требуется Android Chrome / Chrome или Edge с Web Bluetooth по HTTPS.'); return; }
+  connecting = true;
+  ui();
+  $('connect').textContent = 'Подключение…';
   try {
     device = await navigator.bluetooth.requestDevice({ filters: [{ services: [SERVICE] }] });
     device.addEventListener('gattserverdisconnected', disconnect);
@@ -166,8 +188,13 @@ async function connect() {
     tx.addEventListener('characteristicvaluechanged', onFrame);
     status('Подключено к ' + (device.name || 'ESP32-S3'), true);
     log('BLE подключён. Для диагностики вручную выбери ENG на ПК и в панели.');
+  } catch (err) {
+    disconnect();
+    log('Ошибка подключения: ' + err.message);
+  } finally {
+    connecting = false;
     ui();
-  } catch (err) { disconnect(); log('Ошибка подключения: ' + err.message); }
+  }
 }
 function download(content, filename, mime) {
   const blob = new Blob([content], { type: mime });
@@ -187,7 +214,10 @@ function selectTab(name) {
 }
 $('tab-keyboard').addEventListener('click', () => selectTab('keyboard'));
 $('tab-diagnostics').addEventListener('click', () => selectTab('diagnostics'));
-$('connect').addEventListener('click', connect);
+$('connect').addEventListener('click', async () => {
+  if (rx || device?.gatt?.connected) disconnect();
+  else await connect();
+});
 $('pc-layout').addEventListener('change', () => {
   ui();
   $('detail').textContent = $('pc-layout').value === 'en'
