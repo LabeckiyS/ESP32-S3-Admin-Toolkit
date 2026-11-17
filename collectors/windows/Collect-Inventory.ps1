@@ -16,7 +16,8 @@ param(
     [switch]$NoTransfer,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'reports'), # Deprecated compatibility parameter; no report files are written.
     [ValidateRange(1,500)][int]$MaxPnpDevices = 120,
-    [switch]$IncludeSerialNumbers
+    [switch]$IncludeSerialNumbers,
+    [ValidateSet('Fast','Full')][string]$Mode = 'Fast'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -93,6 +94,363 @@ function Get-LocalAccessAudit {
         note = 'PasswordRequired is policy metadata, not proof that a nonempty password is set. Domain nested groups and effective rights are not fully resolved.'
     }
 }
+
+# Compact inventory: skips the time-consuming PnP, software, update, event and services checks.
+function Get-QuickInventory {
+    $os=Capture { Get-CimInstance Win32_OperatingSystem -ErrorAction Stop }
+    $cs=Capture { Get-CimInstance Win32_ComputerSystem -ErrorAction Stop }
+    $board=Capture { Get-CimInstance Win32_BaseBoard -ErrorAction Stop }
+    $cpu=Capture { @(Get-CimInstance Win32_Processor -ErrorAction Stop |
+        Select-Object -First 2 Name, NumberOfCores, NumberOfLogicalProcessors) }
+    $ram=Capture { @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop |
+        Select-Object DeviceLocator, @{N='CapacityBytes';E={[int64]$_.Capacity}}, Speed) }
+    $disks=Capture { @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop |
+        Select-Object -First 8 Model, @{N='SizeBytes';E={[int64]$_.Size}}) }
+    $volumes=Capture { @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop |
+        Select-Object -First 8 DeviceID, FileSystem, @{N='SizeBytes';E={[int64]$_.Size}}, @{N='FreeBytes';E={[int64]$_.FreeSpace}}) }
+    $gpu=Capture { @(Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object -First 2 Name) }
+    $adapters=Capture { @(Get-NetAdapter -Physical -ErrorAction Stop |
+        Select-Object -First 8 Name, InterfaceDescription, MacAddress, Status, LinkSpeed, ifIndex) }
+    $ipConfig=Capture {
+        $cfgs=@(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -ErrorAction Stop)
+        $nics=@(Get-NetAdapter -Physical -ErrorAction Stop | Select-Object -First 8)
+        @($nics | ForEach-Object {
+            $nic=$_; $match=@($cfgs | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex })
+            $c=if ($match.Count) { $match[0] } else { $null }
+            [ordered]@{
+                interfaceAlias=[string]$nic.Name
+                ipv4=if ($null -ne $c) {@($c.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}
+    $os = Capture { Get-CimInstance Win32_OperatingSystem -ErrorAction Stop }
+    $cs = Capture { Get-CimInstance Win32_ComputerSystem -ErrorAction Stop }
+    $bios = Capture { Get-CimInstance Win32_BIOS -ErrorAction Stop }
+    $board = Capture { Get-CimInstance Win32_BaseBoard -ErrorAction Stop }
+
+    $system = [ordered]@{
+        computerName = $env:COMPUTERNAME
+        os = if ($os -is [Microsoft.Management.Infrastructure.CimInstance]) {
+            [ordered]@{ caption = $os.Caption; version = $os.Version; build = $os.BuildNumber; architecture = $os.OSArchitecture; lastBoot = $os.LastBootUpTime }
+        } else { $os }
+        machine = if ($cs -is [Microsoft.Management.Infrastructure.CimInstance]) {
+            [ordered]@{ manufacturer = $cs.Manufacturer; model = $cs.Model; domainJoined = $cs.PartOfDomain; totalMemory = [int64]$cs.TotalPhysicalMemory }
+        } else { $cs }
+        bios = if ($bios -is [Microsoft.Management.Infrastructure.CimInstance]) {
+            $result = [ordered]@{ manufacturer = $bios.Manufacturer; version = $bios.SMBIOSBIOSVersion; releaseDate = $bios.ReleaseDate }
+            if ($IncludeSerialNumbers) { $result['serialNumber'] = $bios.SerialNumber }
+            $result
+        } else { $bios }
+        mainboard = if ($board -is [Microsoft.Management.Infrastructure.CimInstance]) {
+            $result = [ordered]@{ manufacturer = $board.Manufacturer; product = $board.Product }
+            if ($IncludeSerialNumbers) { $result['serialNumber'] = $board.SerialNumber }
+            $result
+        } else { $board }
+    }
+
+    $cpu = Capture {
+        @(Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed)
+    }
+    $memory = Capture {
+        @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop | Select-Object DeviceLocator, @{N='CapacityBytes';E={[int64]$_.Capacity}}, Speed, Manufacturer, PartNumber)
+    }
+    $disks = Capture {
+        @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Select-Object Model, InterfaceType, MediaType, @{N='SizeBytes';E={[int64]$_.Size}})
+    }
+    $volumes = Capture {
+        @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop | Select-Object DeviceID, FileSystem, VolumeName, @{N='SizeBytes';E={[int64]$_.Size}}, @{N='FreeBytes';E={[int64]$_.FreeSpace}})
+    }
+    $gpu = Capture {
+        @(Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object Name, DriverVersion, VideoProcessor)
+    }
+    $monitors = Capture {
+        @(Get-CimInstance Win32_DesktopMonitor -ErrorAction Stop | Select-Object Name, MonitorManufacturer, ScreenWidth, ScreenHeight)
+    }
+    $printers = Capture {
+        @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name, DriverName, PortName, Network, Default)
+    }
+    $pnp = Capture {
+        $all = @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Sort-Object Class, FriendlyName)
+        $wanted = @('DiskDrive','Display','Net','Monitor','Ports','Bluetooth','Firmware')
+        $focus = @($all | Where-Object { $_.Status -ne 'OK' -or $_.Class -in $wanted } |
+          Sort-Object Class, FriendlyName -Unique | Select-Object -First $MaxPnpDevices)
+        $selected = @($focus | ForEach-Object {
+            [ordered]@{
+                class = $_.Class
+                name = $_.FriendlyName
+                status = $_.Status
+                problem = $_.Problem
+                instanceId = if ($IncludeSerialNumbers) { $_.InstanceId } else { $null }
+            }
+        })
+        [ordered]@{ total = $all.Count; included = $selected.Count; truncated = ($all.Count -gt $selected.Count); devices = $selected }
+    }
+    # Keep only physical adapters; IP comes from the CIM adapter configuration.
+    $adapters = Capture {
+        @(Get-NetAdapter -Physical -ErrorAction Stop | Sort-Object Name | Select-Object -First 8 Name, InterfaceDescription, Status, MacAddress, LinkSpeed, HardwareInterface, ifIndex)
+    }
+    $ipConfig = Capture {
+        $nics = @(Get-NetAdapter -Physical -ErrorAction Stop | Sort-Object Name | Select-Object -First 8)
+        $cfgs = @(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -ErrorAction Stop)
+        @($nics | ForEach-Object {
+            $nic = $_
+            $m = @($cfgs | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex })
+            $c = if ($m.Count) { $m[0] } else { $null }
+            [ordered]@{
+                interfaceAlias = [string]$nic.Name
+                ipv4 = if ($null -ne $c) { @($c.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' }) } else { @() }
+                ipv6 = if ($null -ne $c) { @($c.IPAddress | Where-Object { $_ -match ':' }) } else { @() }
+                gateway = if ($null -ne $c) { @($c.DefaultIPGateway | Where-Object { $_ }) } else { @() }
+                dns = if ($null -ne $c) { @($c.DNSServerSearchOrder | Where-Object { $_ }) } else { @() }
+                dhcp = if ($null -ne $c) { [bool]$c.DHCPEnabled } else { $null }
+            }
+        })
+    }
+    $profiles = Capture {
+        @(Get-NetConnectionProfile -ErrorAction Stop | Select-Object InterfaceAlias, Name, NetworkCategory, IPv4Connectivity, IPv6Connectivity)
+    }
+    $firewall = Capture {
+        @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled, DefaultInboundAction, DefaultOutboundAction)
+    }
+    $defender = Capture {
+        Get-MpComputerStatus -ErrorAction Stop | Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled
+    }
+    # Read-only software/services/security checks: no Win32_Product MSI repair.
+    $software = Capture {
+        $paths = @(
+            'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        )
+        $all = @(Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_.DisplayName) } |
+            Sort-Object DisplayName, DisplayVersion -Unique)
+        [ordered]@{
+            total=$all.Count
+            truncated=($all.Count -gt 25)
+            items=@($all | Select-Object -First 25 |
+                Select-Object DisplayName, DisplayVersion, Publisher, InstallDate)
+        }
+    }
+    $updates = Capture {
+        @(Get-HotFix -ErrorAction Stop | Sort-Object InstalledOn -Descending |
+            Select-Object -First 12 HotFixID, Description, InstalledOn)
+    }
+    $services = Capture {
+        $all = @(Get-CimInstance Win32_Service -Filter "StartMode='Auto' AND State<>'Running'" -ErrorAction Stop |
+            Sort-Object DisplayName)
+        [ordered]@{
+            total=$all.Count
+            truncated=($all.Count -gt 25)
+            items=@($all | Select-Object -First 25 |
+                Select-Object Name, DisplayName, State, StartMode)
+        }
+    }
+    $antivirus = Capture {
+        @(Get-CimInstance -Namespace 'root/SecurityCenter2' -ClassName AntivirusProduct -ErrorAction Stop |
+            Select-Object displayName, productState)
+    }
+    $uac = Capture {
+        Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -ErrorAction Stop |
+            Select-Object EnableLUA, ConsentPromptBehaviorAdmin
+    }
+    $bitLocker = Capture {
+        @(Get-BitLockerVolume -ErrorAction Stop |
+            Select-Object MountPoint, VolumeStatus, ProtectionStatus, EncryptionMethod)
+    }
+    $tpm = Capture {
+        Get-Tpm -ErrorAction Stop | Select-Object TpmPresent, TpmReady, TpmEnabled
+    }
+    $secureBoot = Capture { Confirm-SecureBootUEFI -ErrorAction Stop }
+
+    $recentErrors = Capture {
+        @(Get-WinEvent -FilterHashtable @{ LogName='System'; Level=1,2; StartTime=(Get-Date).AddDays(-1) } -MaxEvents 8 -ErrorAction Stop | Select-Object TimeCreated, Id, LevelDisplayName, ProviderName)
+    }
+
+    return [ordered]@{
+        schemaVersion = 1
+        collectorVersion = '0.4.0'
+        mode = 'full'
+        collectedAt = (Get-Date).ToUniversalTime().ToString('o')
+        system = $system
+        localAccess = Get-LocalAccessAudit
+        cpu = $cpu
+        ram = $memory
+        disks = $disks
+        volumes = $volumes
+        gpu = $gpu
+        monitors = $monitors
+        printers = $printers
+        pnp = $pnp
+        network = [ordered]@{ adapters = $adapters; ipConfig = $ipConfig; profiles = $profiles }
+        security = [ordered]@{
+            firewall = $firewall
+            defender = $defender
+            antivirusProducts = $antivirus
+            uac = $uac
+            bitLocker = $bitLocker
+            tpm = $tpm
+            secureBoot = $secureBoot
+        }
+        installedSoftware = $software
+        recentUpdates = $updates
+        autoServicesNotRunning = $services
+        systemErrors24h = $recentErrors
+    }
+}
+
+function Get-Crc32([byte[]]$Bytes) {
+    [uint32]$crc = [uint32]::MaxValue
+    [uint32]$polynomial = 3988292384
+    foreach ($byte in $Bytes) {
+        $crc = [uint32]($crc -bxor [uint32]$byte)
+        for ($bit=0; $bit -lt 8; $bit++) {
+            if (($crc -band [uint32]1) -ne 0) {
+                $crc = [uint32](($crc -shr 1) -bxor $polynomial)
+            } else {
+                $crc = [uint32]($crc -shr 1)
+            }
+        }
+    }
+    return [uint32]($crc -bxor [uint32]::MaxValue)
+}
+function Receive-Reply([System.IO.Ports.SerialPort]$Serial, [string]$Expected) {
+    # Ignore delayed duplicate ACKs from a previous USB retry.
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {
+        $response = $Serial.ReadLine().Trim()
+        if ($response -like 'ERR|*') { throw "Устройство вернуло ошибку: $response" }
+        if ($response.StartsWith($Expected, [StringComparison]::Ordinal)) {
+            return $response
+        }
+        if ($response -match '^ACK\|[0-9]+$') { continue }
+        throw "Неожиданный ответ устройства: $response (ожидалось $Expected)"
+    }
+    throw "От ESP32 не поступило ожидаемое подтверждение $Expected"
+}
+function Send-Inventory([byte[]]$Bytes, [uint32]$Checksum, [string]$ComPort, [System.IO.Ports.SerialPort]$ExistingSerial) {
+    # The bootstrap passes its already-open USB CDC handle. Reopening the
+    # serial device after downloading the script can lose the Windows COM port.
+    $ownsPort = ($null -eq $ExistingSerial)
+    if ($ownsPort) {
+        $serial = [System.IO.Ports.SerialPort]::new($ComPort, 115200, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
+    } else {
+        $serial = $ExistingSerial
+        if (-not $serial.IsOpen) { throw 'Existing USB CDC handle is closed' }
+    }
+    $serial.NewLine = "`n"
+    $serial.ReadTimeout = 3500
+    $serial.WriteTimeout = 3500
+    try {
+        if ($ownsPort) {
+            $serial.DtrEnable = $false
+            $serial.RtsEnable = $false
+            $serial.Open()
+            Start-Sleep -Milliseconds 800
+        }
+        $serial.DiscardInBuffer()
+        $serial.WriteLine('PING')
+        [void](Receive-Reply $serial 'PONG|')
+        $serial.WriteLine(('BEGIN|{0}|{1:X8}' -f $Bytes.Length, $Checksum))
+        [void](Receive-Reply $serial 'READY')
+        $seq = 0
+        for ($offset = 0; $offset -lt $Bytes.Length; $offset += 64) {
+            $len = [Math]::Min(64, $Bytes.Length - $offset)
+            $part = New-Object byte[] $len
+            [Array]::Copy($Bytes, $offset, $part, 0, $len)
+            $hex = [BitConverter]::ToString($part).Replace('-', '')
+            $command = "DATA|$seq|$hex"
+            $serial.WriteLine($command)
+            $expected = "ACK|$seq"
+            try { [void](Receive-Reply $serial $expected) }
+            catch {
+                # Re-send the same block once. Firmware recognizes duplicate sequence.
+                $serial.WriteLine($command)
+                [void](Receive-Reply $serial $expected)
+            }
+            $seq++
+        }
+        $serial.WriteLine('END')
+        [void](Receive-Reply $serial 'DONE|')
+    }
+    finally {
+        if ($ownsPort) {
+            if ($serial.IsOpen) { $serial.Close() }
+            $serial.Dispose()
+        }
+    }
+}
+
+$inventory = if ($Mode -eq 'Fast') { Get-QuickInventory } else { Get-Inventory }
+$json = ConvertTo-Json -InputObject $inventory -Depth 8 -Compress
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$bytes = $utf8.GetBytes($json)
+$crc = Get-Crc32 $bytes
+
+# JSON is only an in-memory transport; no JSON/TXT report is written on Windows.
+# Preserve the user/group audit and network MAC addresses when a large PnP
+# or software inventory would otherwise exceed the ESP32 flash protocol cap.
+foreach ($limit in @(40, 20, 10, 0)) {
+    if ($bytes.Length -le 65536) { break }
+    if ($inventory['pnp'] -is [System.Collections.IDictionary] -and
+        $inventory['pnp']['devices'] -is [array]) {
+        $inventory['pnp']['devices'] = @($inventory['pnp']['devices'] | Select-Object -First $limit)
+        $inventory['pnp']['included'] = $inventory['pnp']['devices'].Count
+        $inventory['pnp']['truncated'] = $true
+    }
+    if ($inventory['installedSoftware'] -is [System.Collections.IDictionary]) {
+        $inventory['installedSoftware']['items'] = @($inventory['installedSoftware']['items'] | Select-Object -First $limit)
+        $inventory['installedSoftware']['truncated'] = $true
+    }
+    $json = ConvertTo-Json -InputObject $inventory -Depth 8 -Compress
+    $bytes = $utf8.GetBytes($json)
+    $crc = Get-Crc32 $bytes
+}
+Write-Host ("Инвентаризация в памяти: UTF-8 {0} байт; CRC32: {1:X8}" -f $bytes.Length, $crc)
+if ($bytes.Length -gt 65536) {
+    throw 'Report exceeds 65536-byte firmware limit even after list reduction'
+}
+if ($NoTransfer) { Write-Host 'Диагностика завершена без передачи. Файлы отчётов не создаются.'; return }
+if (-not $Port -and $null -eq $OpenSerial) {
+    Write-Host 'Укажи COM-порт прибора: .\Collect-Inventory.ps1 -Port COM7'
+    Write-Host 'Доступные порты: '
+    [System.IO.Ports.SerialPort]::GetPortNames() | ForEach-Object { Write-Host "  $_" }
+    return
+}
+Send-Inventory -Bytes $bytes -Checksum $crc -ComPort $Port -ExistingSerial $OpenSerial
+Write-Host 'Данные переданы на ESP32. Открой вкладку Диагностика на телефоне для копирования технического текста.'
+ })} else {@()}
+                gateway=if ($null -ne $c) {@($c.DefaultIPGateway | Where-Object { $_ })} else {@()}
+                dns=if ($null -ne $c) {@($c.DNSServerSearchOrder | Where-Object { $_ })} else {@()}
+                dhcp=if ($null -ne $c) {[bool]$c.DHCPEnabled} else {$null}
+            }
+        })
+    }
+    $admins=Capture {
+        $sid=New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+        $members=@(Get-LocalGroupMember -SID $sid -ErrorAction Stop |
+            Select-Object -First 12 Name, ObjectClass, PrincipalSource)
+        [ordered]@{total=$members.Count;members=$members;truncated=$false}
+    }
+    $firewall=Capture { @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled) }
+    return [ordered]@{
+        schemaVersion=1; collectorVersion='0.4.0'; mode='fast'
+        collectedAt=(Get-Date).ToUniversalTime().ToString('o')
+        system=[ordered]@{
+            computerName=$env:COMPUTERNAME
+            os=if ($os -is [Microsoft.Management.Infrastructure.CimInstance]) {
+                [ordered]@{caption=$os.Caption;version=$os.Version;build=$os.BuildNumber;architecture=$os.OSArchitecture}
+            } else {$os}
+            machine=if ($cs -is [Microsoft.Management.Infrastructure.CimInstance]) {
+                [ordered]@{manufacturer=$cs.Manufacturer;model=$cs.Model;domainJoined=$cs.PartOfDomain;totalMemory=[int64]$cs.TotalPhysicalMemory}
+            } else {$cs}
+            mainboard=if ($board -is [Microsoft.Management.Infrastructure.CimInstance]) {
+                [ordered]@{manufacturer=$board.Manufacturer;product=$board.Product}
+            } else {$board}
+        }
+        cpu=$cpu;ram=$ram;disks=$disks;volumes=$volumes;gpu=$gpu
+        network=[ordered]@{adapters=$adapters;ipConfig=$ipConfig}
+        localAccess=[ordered]@{groups=[ordered]@{administrators=$admins}}
+        security=[ordered]@{firewall=$firewall}
+    }
+}
+
 function Get-Inventory {
     $os = Capture { Get-CimInstance Win32_OperatingSystem -ErrorAction Stop }
     $cs = Capture { Get-CimInstance Win32_ComputerSystem -ErrorAction Stop }
