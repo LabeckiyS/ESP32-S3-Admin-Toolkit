@@ -100,7 +100,7 @@ test('ENG explicitly allows the diagnostic command without layout toggling', asy
   r.env.document.getElementById('pc-layout').value = 'en';
   r.get('ui()');
   await r.elements.get('run').click();
-  assert.equal(r.env.writes.at(-1), 'RUN|EN');
+  assert.equal(r.env.writes.at(-1), 'RUN|EN|FAST');
   assert.ok(!r.env.writes.includes('RUN|RU'));
 });
 
@@ -133,4 +133,35 @@ test('Technical passport displays copyable text, without download controls', () 
   assert.match(text,/локальной группы Администраторы/i);
   assert.match(source,/formatTechnicalReport/);
   assert.ok(!source.includes('createObjectURL'));
+});
+
+test('Full diagnostics explicitly selects the FULL collector', async () => {
+  const r = makeRuntime();
+  r.elements.get('pc-layout').value='en';
+  r.elements.get('scan-mode').value='full';
+  await r.elements.get('run').click();
+  assert.equal(r.env.writes.at(-1), 'RUN|EN|FULL');
+});
+
+test('W4 BLE metadata acknowledges each four-frame window, not each packet', async () => {
+  const r = makeRuntime();
+  const bytes=new TextEncoder().encode(JSON.stringify({schemaVersion:1,mode:'fast',system:{computerName:'TEST-PC'},payload:'x'.repeat(115)}));
+  const crc=r.crc(bytes).toString(16);
+  r.send(new TextEncoder().encode('M|'+bytes.length+'|'+crc+'|W4'));
+  for(let pos=0,seq=0;pos<bytes.length;pos+=16,seq++)
+    r.send(new Uint8Array([68,seq&255,seq>>8,...bytes.slice(pos,pos+16)]));
+  r.send(new Uint8Array([69]));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(!r.env.writes.includes('A|0'));
+  assert.ok(!r.env.writes.includes('A|1'));
+  assert.ok(!r.env.writes.includes('A|2'));
+  assert.ok(r.env.writes.includes('A|3'));
+  assert.equal(r.get('report.object.system.computerName'),'TEST-PC');
+});
+
+test('Compact report displays physical MAC and IPv4', () => {
+  const r=makeRuntime();
+  r.get("showReport({schemaVersion:1,mode:'fast',system:{computerName:'TEST-FAST'},network:{adapters:[{Name:'Ethernet',MacAddress:'AA-BB-CC-DD-EE-FF'}],ipConfig:[{interfaceAlias:'Ethernet',ipv4:['192.0.2.25'],gateway:['192.0.2.1'],dns:['1.1.1.1']}]}})");
+  assert.match(r.elements.get('report-text').value,/192\.0\.2\.25/);
+  assert.match(r.elements.get('report-text').value,/AA-BB-CC-DD-EE-FF/);
 });
