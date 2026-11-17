@@ -10,7 +10,13 @@ const decoder = new TextDecoder('utf-8', { fatal: true });
 const encoder = new TextEncoder();
 function log(message) { $('log').textContent = `[${new Date().toLocaleTimeString()}] ${message}\n` + $('log').textContent.slice(0, 4200); }
 function status(message, connected) { $('status').textContent = message; $('dot').classList.toggle('online', !!connected); }
-function ui() { $('run').disabled = !rx; $('get').disabled = !rx; $('cancel').disabled = !rx || !current; if (typeof updateKeyboardUI === 'function') updateKeyboardUI(!!rx); }
+function ui() {
+  // The chosen layout is informational; the dongle never changes Windows language.
+  $('run').disabled = !rx || $('pc-layout').value !== 'en';
+  $('get').disabled = !rx;
+  $('cancel').disabled = !rx || !current;
+  if (typeof updateKeyboardUI === 'function') updateKeyboardUI(!!rx);
+}
 function progress(done, total) { $('progress').style.width = (total ? Math.min(100, 100 * done / total) : 0).toFixed(1) + '%'; }
 function queueBytes(payload, withoutResponse = false) {
   if (!rx) return Promise.reject(new Error('BLE не подключён'));
@@ -78,7 +84,11 @@ function onFrame(event) {
   } else if (message === 'E') {
     finishReport();
   } else if (message.startsWith('N|')) {
-    log('Ошибка устройства: ' + message.slice(2)); current = null; ui();
+    if (message === 'N|ENG_REQUIRED') {
+      $('detail').textContent = 'На ПК выбрана RUS. Переключи язык вручную на ENG и выбери ENG в панели.';
+      log($('detail').textContent);
+    } else log('Ошибка устройства: ' + message.slice(2));
+    current = null; ui();
   } else if (message.startsWith('P|')) {
     const phase = message.slice(2);
     const labels = { LAUNCHING: 'Открывается PowerShell на компьютере', BOOTSTRAP: 'Загружается сборщик через USB CDC', COLLECTOR: 'Windows получает сборщик с ESP32', RECEIVING: 'Windows передаёт диагностические данные', DONE: 'Диагностика завершена; получаем отчёт', READY: 'Ожидание' };
@@ -155,7 +165,7 @@ async function connect() {
     await tx.startNotifications();
     tx.addEventListener('characteristicvaluechanged', onFrame);
     status('Подключено к ' + (device.name || 'ESP32-S3'), true);
-    log('BLE подключён. Разблокируй Windows, выбери ENG и нажми «Старт диагностики».');
+    log('BLE подключён. Для диагностики вручную выбери ENG на ПК и в панели.');
     ui();
   } catch (err) { disconnect(); log('Ошибка подключения: ' + err.message); }
 }
@@ -178,13 +188,20 @@ function selectTab(name) {
 $('tab-keyboard').addEventListener('click', () => selectTab('keyboard'));
 $('tab-diagnostics').addEventListener('click', () => selectTab('diagnostics'));
 $('connect').addEventListener('click', connect);
+$('pc-layout').addEventListener('change', () => {
+  ui();
+  $('detail').textContent = $('pc-layout').value === 'en'
+    ? 'Режим ENG: запуск разрешён. Раскладка Windows автоматически не меняется.'
+    : 'Режим RUS: перед запуском вручную переключи Windows на ENG и выбери ENG здесь.';
+});
 $('run').addEventListener('click', async () => {
-  const fromRussian = $('pc-layout').value === 'ru';
+  if ($('pc-layout').value !== 'en') {
+    log('Запуск отменён: на ПК должна быть вручную установлена раскладка ENG.');
+    return;
+  }
   try {
-    await queueCommand(fromRussian ? 'RUN|RU' : 'RUN|EN');
-    log(fromRussian
-      ? 'ESP32 сначала переключит RUS → ENG (Win+Space), затем откроет PowerShell.'
-      : 'ENG уже выбрана: ESP32 откроет PowerShell без переключения.');
+    await queueCommand('RUN|EN');
+    log('Старт: ESP32 открывает PowerShell без переключения раскладки.');
   } catch (err) { log('RUN: ' + err.message); }
 });
 $('get').addEventListener('click', async () => {
