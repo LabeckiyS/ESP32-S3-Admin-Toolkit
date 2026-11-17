@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.8
+ * ESP32-S3 Admin Toolkit, firmware 0.4.0
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -32,7 +32,9 @@ constexpr char kTemp[] = "/incoming.part";
 constexpr size_t kMaxReport = 65536;
 constexpr size_t kChunk = 64;         // USB payload bytes per stop-and-wait line
 constexpr size_t kBleChunk = 16;      // 1(type)+2(seq)+16(payload) <= ATT MTU 23
-constexpr uint32_t kAckTimeout = 900; // BLE resend when app acknowledgment is absent
+constexpr uint32_t kAckTimeout = 1600;
+constexpr uint8_t kBleWindow = 4; // Cumulative ACK once per four 16-byte notifications
+constexpr uint32_t kBleInterval = 35; // BLE resend when app acknowledgment is absent
 constexpr uint8_t kMaxRetries = 8;
 constexpr int kBtn = 0;
 constexpr int kTftCs = 4, kTftDc = 2, kTftRst = 1;
@@ -59,6 +61,7 @@ volatile bool requestStop = false;
 volatile int32_t ackedSeq = -1;
 volatile bool requestStatus = false;
 volatile bool requestRun = false;
+volatile bool requestRunFull = false;
 volatile bool requestEnglishRequired = false;
 bool hidBusy = false;
 
@@ -81,6 +84,11 @@ size_t pendingLen = 0;
 uint8_t retries = 0;
 uint32_t lastSend = 0;
 size_t sendRemaining = 0;
+uint8_t windowFrames[cfg::kBleWindow][20]{};
+uint8_t windowLens[cfg::kBleWindow]{};
+uint8_t windowCount = 0;
+uint8_t windowSent = 0;
+uint16_t windowLastSeq = 0;
 uint32_t lastDraw = 0;
 String diagnosticStage = "READY";
 #include "generated_collector.h"
@@ -120,7 +128,7 @@ void closeUpload(bool removePartial) {
 }
 
 void usbCommand(const String &line) {
-  if (line == "PING") { usbReply("PONG|0.3.1"); return; }
+  if (line == "PING") { usbReply("PONG|0.4.0"); return; }
   if (line == "SCRIPT") {
     diagnosticStage = "COLLECTOR";
     // Explicitly requested after a BLE RUN; collector payload is build-time pinned.
@@ -267,9 +275,10 @@ class RxEvents : public BLECharacteristicCallbacks {
       // Never toggle the Windows input layout, even for legacy browser clients.
       requestEnglishRequired = true;
     }
-    else if (s == "RUN" || s == "RUN|EN") {
-      // Caller confirms that the Windows input language is already ENG.
-      requestRun = true;
+    else if (s == "RUN|EN|FULL") { requestRunFull = true; requestRun = true; }
+    else if (s == "RUN" || s == "RUN|EN" || s == "RUN|EN|FAST") {
+      // Caller confirms Windows ENG. Default to the compact report.
+      requestRunFull = false; requestRun = true;
     }
     else if (s.startsWith("A|")) {
       uint32_t seq = 0;
@@ -289,6 +298,7 @@ void stopTransfer() {
   if (sendFile) sendFile.close();
   transferActive = false; waitingAck = false;
   pendingLen = 0; sendRemaining = 0;
+  windowCount = 0; windowSent = 0;
 }
 
 void beginTransfer() {
@@ -296,7 +306,7 @@ void beginTransfer() {
   if (!fsReady || !LittleFS.exists(cfg::kReport) || reportSize == 0) {
     notifyText("N|NO_REPORT"); return;
   }
-  notifyText(String("M|") + reportSize + "|" + String(reportCrc, HEX));
+  notifyText(String("M|") + reportSize + "|" + String(reportCrc, HEX) + "|W4");
 }
 
 void startTransfer() {
@@ -448,7 +458,7 @@ void pollHid() {
 
 // No automatic input-language switching: Win+Space would cycle layouts and
 // could leave the user in the wrong language. Only explicit RUN|EN proceeds.
-void launchCollector() {
+void launchCollector(bool full) {
   if (!bleConnected || hidBusy) return;
   hidBusy = true;
   diagnosticStage = "LAUNCHING";
@@ -464,7 +474,7 @@ void launchCollector() {
   delay(5000);
   // Build script is read from the device's CDC port, SHA-256 checked, written
   // to local TEMP, then run as a file. No execution-policy bypass or elevation.
-  typeAscii(kBootstrap);
+  typeAscii(full ? kBootstrapFull : kBootstrapFast);
   hidTap(KEY_RETURN);
   diagnosticStage = "BOOTSTRAP";
   notifyText("P|BOOTSTRAP");
@@ -499,36 +509,51 @@ void pollTransfer() {
   }
   if (requestStart) { requestStart = false; startTransfer(); }
   if (!transferActive) return;
+  // Fill a four-frame window once, then send with pacing. CRC32 checks the
+  // complete report; a missing notify triggers go-back-N window retransmission.
+  if (windowCount == 0) {
+    if (sendRemaining == 0) { notifyText("E"); stopTransfer(); return; }
+    windowSent = 0;
+    retries = 0;
+    waitingAck = false;
+    while (windowCount < cfg::kBleWindow && sendRemaining) {
+      uint8_t *frame = windowFrames[windowCount];
+      size_t len = min(cfg::kBleChunk, sendRemaining);
+      frame[0] = 'D';
+      frame[1] = static_cast<uint8_t>(nextBleSeq & 0xff);
+      frame[2] = static_cast<uint8_t>((nextBleSeq >> 8) & 0xff);
+      if (sendFile.read(&frame[3], len) != (int)len) {
+        notifyText("N|READ"); stopTransfer(); return;
+      }
+      windowLens[windowCount] = len + 3;
+      windowLastSeq = nextBleSeq++;
+      sendRemaining -= len;
+      windowCount++;
+    }
+  }
   if (waitingAck) {
-    if (ackedSeq == pendingSeq) {
+    if (ackedSeq == windowLastSeq) {
       ackedSeq = -1;
       waitingAck = false;
-      nextBleSeq++;
-      if (sendRemaining == 0) { notifyText("E"); stopTransfer(); return; }
+      windowCount = 0;
+      windowSent = 0;
     } else if (millis() - lastSend >= cfg::kAckTimeout) {
       if (retries >= cfg::kMaxRetries) {
         notifyText("N|TIMEOUT"); stopTransfer(); return;
       }
-      notifyBytes(pendingFrame, pendingLen);
-      lastSend = millis();
-      retries++;
+      // Go back and resend the whole window; browser discards duplicates.
+      ++retries;
+      windowSent = 0;
+      waitingAck = false;
     }
+    return;
   }
-  if (!waitingAck && transferActive && sendRemaining) {
-    size_t len = min(cfg::kBleChunk, sendRemaining);
-    pendingFrame[0] = 'D';
-    pendingFrame[1] = static_cast<uint8_t>(nextBleSeq & 0xff);
-    pendingFrame[2] = static_cast<uint8_t>((nextBleSeq >> 8) & 0xff);
-    if (sendFile.read(&pendingFrame[3], len) != (int)len) {
-      notifyText("N|READ"); stopTransfer(); return;
-    }
-    pendingSeq = nextBleSeq;
-    pendingLen = len + 3;
-    sendRemaining -= len;
-    waitingAck = true;
-    retries = 0;
-    notifyBytes(pendingFrame, pendingLen);
+  if (windowSent < windowCount &&
+      (windowSent == 0 || millis() - lastSend >= cfg::kBleInterval)) {
+    notifyBytes(windowFrames[windowSent], windowLens[windowSent]);
+    ++windowSent;
     lastSend = millis();
+    if (windowSent == windowCount) waitingAck = true;
   }
 }
 
@@ -645,7 +670,9 @@ void loop() {
   }
   if (requestRun) {
     requestRun = false;
-    launchCollector();
+    bool full = requestRunFull;
+    requestRunFull = false;
+    launchCollector(full);
   }
   pollAdvertisingRecovery();
   pollTransfer();
