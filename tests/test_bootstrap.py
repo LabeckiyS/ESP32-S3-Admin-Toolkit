@@ -39,7 +39,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_bootstrap_is_offline_and_does_not_bypass_policy(self):
         text = HEADER.read_text('utf-8')
-        bootstrap = text.split('kBootstrap[] PROGMEM = R"BOOT(', 1)[1].split(')BOOT"', 1)[0]
+        bootstrap = text.split('kBootstrapFast[] PROGMEM = R"BOOT(', 1)[1].split(')BOOT"', 1)[0]
         self.assertTrue(bootstrap.isascii())
         self.assertLess(len(bootstrap), 1200)
         for required in ('VID_303A', "'SCRIPT'", 'SHA256', 'WriteAllBytes', '@(239,187,191)', '& $f'):
