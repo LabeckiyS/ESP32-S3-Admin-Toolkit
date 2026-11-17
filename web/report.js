@@ -21,7 +21,7 @@ function formatTechnicalReport(data) {
   const section = (title) => { add(''); add('=== ' + title.toUpperCase() + ' ==='); };
   const item = (i, title) => add('  ' + (i + 1) + '. ' + val(title));
   const unavailable = (x, text) => {
-    if (x && x.unavailable) { add(text + ': недоступно' + (x.errorType ? ' (' + x.errorType + ')' : '')); return true; }
+    if (x && x.unavailable) { add(text + ': нет доступа / запрос не поддержан' + (x.errorType ? ' (' + x.errorType + ')' : '')); return true; }
     return false;
   };
   const details = (entries) => { for (const [name, v] of entries) add('     ' + name + ': ' + val(v)); };
