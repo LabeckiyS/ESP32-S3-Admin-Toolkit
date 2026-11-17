@@ -31,10 +31,11 @@ bootstrap = (
     # Windows PowerShell 5.1 decodes BOM-less .ps1 in the local ANSI code page.
     # Keep the SHA-256 check on the original source bytes and add UTF-8 BOM on disk.
     "[IO.File]::WriteAllBytes($f,([byte[]]@(239,187,191)+$a));"
-    "& $f -Port $p -OpenSerial $s -MaxPnpDevices 80"
+    "& $f -Port $p -OpenSerial $s -Mode Fast -MaxPnpDevices 10"
     "}finally{$s.Dispose()}"
 )
-if not bootstrap.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
+bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
+if not bootstrap.isascii() or not bootstrap_full.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
     raise ValueError('Invalid bootstrap')
 # A fixed raw string is easier to audit than hand-escaped C literals.
 result.parent.mkdir(parents=True,exist_ok=True)
@@ -43,7 +44,8 @@ text = (
     '// AUTOMATICALLY GENERATED. DO NOT EDIT. SHA256: '+sha+'\n'
     'static const char kCollectorBase64[] PROGMEM =\n'
     + '\n'.join('  '+json.dumps(b64[i:i+128]) for i in range(0,len(b64),128))+';\n'
-    'static const char kBootstrap[] PROGMEM = R"BOOT('+bootstrap+')BOOT";\n'
+    'static const char kBootstrapFast[] PROGMEM = R"BOOT('+bootstrap+')BOOT";\n'
+    'static const char kBootstrapFull[] PROGMEM = R"BOOT('+bootstrap_full+')BOOT";\n'
 )
 result.write_text(text,encoding='utf-8')
 print('Embedded Windows collector:',len(source),'bytes; bootstrap:',len(bootstrap),'HID characters; SHA256:',sha)
