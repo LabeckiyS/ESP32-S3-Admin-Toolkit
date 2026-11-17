@@ -21,17 +21,18 @@ bootstrap = (
     "if($c.Count -ne 1){throw 'Expected one Espressif CDC COM port'};"
     "$p=$c[0];"
     "$s=[IO.Ports.SerialPort]::new($p,115200);"
-    "$s.ReadTimeout=15000;$s.DtrEnable=$true;$s.Open();"
+    "$s.ReadTimeout=15000;$s.DtrEnable=$true;$s.Open();try{"
     "$s.WriteLine('SCRIPT');$b='';"
     "while(($l=$s.ReadLine().Trim()) -ne 'ENDSCRIPT'){$b+=$l};"
-    "$s.Close();$s.Dispose();"
+    # Same CDC handle is handed to collector, not reopened.
     "$a=[Convert]::FromBase64String($b);"
     "if(([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($a)).Replace('-','')) -ne '"+sha+"'){throw 'Collector SHA256 mismatch'};"
     "$f=Join-Path $env:TEMP 'AdminToolkit-Collect.ps1';"
     # Windows PowerShell 5.1 decodes BOM-less .ps1 in the local ANSI code page.
     # Keep the SHA-256 check on the original source bytes and add UTF-8 BOM on disk.
     "[IO.File]::WriteAllBytes($f,([byte[]]@(239,187,191)+$a));"
-    "& $f -Port $p -OutputDirectory (Join-Path $env:TEMP 'AdminToolkit-Reports') -MaxPnpDevices 80"
+    "& $f -Port $p -OpenSerial $s -OutputDirectory (Join-Path $env:TEMP 'AdminToolkit-Reports') -MaxPnpDevices 80"
+    "}finally{$s.Dispose()}"
 )
 if not bootstrap.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
     raise ValueError('Invalid bootstrap')

@@ -33,6 +33,18 @@ class BootstrapTests(unittest.TestCase):
         for forbidden in ('ExecutionPolicy Bypass','DownloadString','Invoke-WebRequest','Invoke-Expression',' -EncodedCommand','-ep bypass'):
             self.assertNotIn(forbidden, bootstrap)
 
+    def test_usb_report_reuses_original_open_cdc_port(self):
+        collector = SOURCE.read_text('utf-8')
+        generator = (ROOT / 'firmware/extra_scripts/embed_collector.py').read_text('utf-8')
+        embedded = HEADER.read_text('utf-8')
+        self.assertIn('[System.IO.Ports.SerialPort]$OpenSerial', collector)
+        self.assertIn('$ownsPort = ($null -eq $ExistingSerial)', collector)
+        self.assertIn('if ($ownsPort) {', collector)
+        self.assertIn('-ExistingSerial $OpenSerial', collector)
+        self.assertIn('-OpenSerial $s', generator)
+        self.assertIn('-OpenSerial $s', embedded)
+        self.assertIn('}finally{$s.Dispose()}', embedded)
+
     def test_hid_only_runs_after_explicit_run_command(self):
         text = MAIN.read_text('utf-8')
         self.assertIn('s == "RUN|RU"', text)
