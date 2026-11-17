@@ -26,6 +26,6 @@ jobs:
       - name: Upload firmware binaries
         uses: actions/upload-artifact@v4
         with:
-          name: admin-toolkit-v0.3.4-lilygo-tdongle-s3
+          name: admin-toolkit-v0.3.6-lilygo-tdongle-s3
           path: firmware/.pio/build/lilygo-tdongle-s3/*.bin
           if-no-files-found: error

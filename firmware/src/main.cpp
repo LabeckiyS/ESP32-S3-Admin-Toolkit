@@ -1,5 +1,5 @@
 /*
- * ESP32-S3 Admin Toolkit, firmware 0.3.5
+ * ESP32-S3 Admin Toolkit, firmware 0.3.6
  * Original implementation. No Wi-Fi, pairing, PIN, background script execution,
  * or unattended HID keystrokes. BLE RUN explicitly triggers a read-only PowerShell collector on an unlocked workstation.
  *
@@ -20,6 +20,7 @@
 #include <LittleFS.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
+#include "cyber_star_v8_splash.h"
 
 namespace cfg {
 constexpr char kName[] = "AdminToolkit-S3";
@@ -500,33 +501,12 @@ void pollTransfer() {
 }
 
 // Draw a real graphical splash once, rather than briefly flashing a text line.
+// Original 80x160 RGB565 star from Wireless Keyboard v11.1.
+// Preserve the source image and its 4-second startup hold.
 void drawBootSplash() {
   display.fillScreen(ST77XX_BLACK);
-  display.setTextSize(1);
-  display.setTextWrap(false);
-  const int16_t x = (display.width() - 40) / 2;
-  const int16_t y = 22;
-  display.drawRoundRect(x, y, 40, 40, 4, ST77XX_CYAN);
-  display.drawRoundRect(x + 5, y + 5, 30, 30, 3, ST77XX_CYAN);
-  for (int i = 0; i < 3; ++i) {
-    const int16_t pin = 8 + i * 12;
-    display.drawFastVLine(x + pin, y - 5, 5, ST77XX_CYAN);
-    display.drawFastVLine(x + pin, y + 40, 5, ST77XX_CYAN);
-    display.drawFastHLine(x - 5, y + pin, 5, ST77XX_CYAN);
-    display.drawFastHLine(x + 40, y + pin, 5, ST77XX_CYAN);
-  }
-  display.setTextColor(ST77XX_WHITE);
-  display.setCursor(x + 14, y + 16);
-  display.print("S3");
-  display.setTextColor(ST77XX_CYAN);
-  display.setCursor(13, 82);
-  display.print("ADMIN");
-  display.setCursor(10, 95);
-  display.print("TOOLKIT");
-  display.drawFastHLine(8, 113, display.width() - 16, ST77XX_CYAN);
-  display.setTextColor(ST77XX_WHITE);
-  display.setCursor(19, 121);
-  display.print("BOOTING");
+  display.drawRGBBitmap(0, 0, cyberStarSplash,
+                        CYBER_STAR_SPLASH_WIDTH, CYBER_STAR_SPLASH_HEIGHT);
 }
 
 // Only repaint a status line when its text changes: no full-screen flash.
@@ -552,7 +532,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.3.5");
+    display.print("  v0.3.6");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");
@@ -577,6 +557,7 @@ void setup() {
   display.initR(INITR_MINI160x80_PLUGIN);
   display.setRotation(0);
   drawBootSplash();
+  delay(4000);  // Match the original v11.1 star splash: 4 seconds after draw.
 
   fsReady = LittleFS.begin(true);
   if (fsReady && LittleFS.exists(cfg::kReport)) {
@@ -615,7 +596,6 @@ void setup() {
   advertising->addServiceUUID(cfg::kService);
   advertising->setScanResponse(true);
   advertising->start();
-  delay(1200);  // Keep the boot logo visible before switching to status.
   renderDisplay(true);
 }
 
