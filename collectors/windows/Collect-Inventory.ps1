@@ -186,7 +186,7 @@ function Get-QuickInventory {
     }
     $firewall=Capture { @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled) }
     return [ordered]@{
-        schemaVersion=1;collectorVersion='0.4.1';mode='fast'
+        schemaVersion=1;collectorVersion='0.4.2';mode='fast'
         collectedAt=(Get-Date).ToUniversalTime().ToString('o')
         system=[ordered]@{
             computerName=$env:COMPUTERNAME
@@ -307,7 +307,10 @@ function Get-Inventory {
             'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
             'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
         )
+        # Registry entries do not always contain DisplayName or DisplayVersion.
+        # Project nullable properties first so StrictMode cannot abort the scan.
         $all = @(Get-ItemProperty -Path $paths -ErrorAction SilentlyContinue |
+            Select-Object DisplayName, DisplayVersion, Publisher, InstallDate |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_.DisplayName) } |
             Sort-Object DisplayName, DisplayVersion -Unique)
         [ordered]@{
@@ -354,7 +357,7 @@ function Get-Inventory {
 
     return [ordered]@{
         schemaVersion = 1
-        collectorVersion = '0.4.1'
+        collectorVersion = '0.4.2'
         mode = 'full'
         collectedAt = (Get-Date).ToUniversalTime().ToString('o')
         system = $system
