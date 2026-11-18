@@ -26,6 +26,71 @@ function Capture([scriptblock]$Action) {
     try { return (& $Action) }
     catch { return @{ unavailable = $true; reason = 'Query failed'; category = [string]$_.CategoryInfo.Category; errorType = $_.Exception.GetType().Name } }
 }
+# Resolve group SID first. Get-LocalGroupMember can throw
+# PrincipalNotFoundException when one member is an orphaned/unresolvable SID.
+# Fallback is read-only ADSI enumeration of the same local group.
+function Get-GroupMembersSafe {
+    param(
+        [Parameter(Mandatory=$true)][string]$GroupSid,
+        [ValidateRange(1,100)][int]$Limit = 40
+    )
+    $sidObject = New-Object System.Security.Principal.SecurityIdentifier($GroupSid)
+    try {
+        $members = @(Get-LocalGroupMember -SID $sidObject -ErrorAction Stop | Sort-Object Name)
+        $items = @($members | Select-Object -First $Limit | ForEach-Object {
+            [ordered]@{
+                name = [string]$_.Name
+                objectClass = [string]$_.ObjectClass
+                principalSource = [string]$_.PrincipalSource
+                sid = [string]$_.SID
+            }
+        })
+        return [ordered]@{
+            total = $members.Count
+            truncated = ($members.Count -gt $Limit)
+            members = $items
+        }
+    } catch {
+        $originalError = $_.Exception.GetType().Name
+    }
+
+    # The built-in group's name depends on the installed Windows language.
+    # Translate S-1-5-32-544 rather than hardcoding "Administrators".
+    $qualifiedName = $sidObject.Translate([System.Security.Principal.NTAccount]).Value
+    $groupName = ($qualifiedName -split '\\')[-1]
+    $group = [ADSI]("WinNT://$env:COMPUTERNAME/$groupName,group")
+    $items = New-Object System.Collections.ArrayList
+    foreach ($member in @($group.psbase.Invoke('Members'))) {
+        $comType = $member.GetType()
+        $name = ''
+        $class = ''
+        $path = ''
+        try { $name = [string]$comType.InvokeMember('Name', 'GetProperty', $null, $member, $null) }
+        catch {}
+        try { $class = [string]$comType.InvokeMember('Class', 'GetProperty', $null, $member, $null) }
+        catch {}
+        try { $path = [string]$comType.InvokeMember('ADsPath', 'GetProperty', $null, $member, $null) }
+        catch {}
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            $name = if ($path) { $path } else { 'Unresolved local group member' }
+        }
+        [void]$items.Add([ordered]@{
+            name = $name
+            objectClass = $class
+            principalSource = 'ADSI'
+            sid = $null
+        })
+    }
+    $sorted = @($items | Sort-Object { $_['name'] })
+    return [ordered]@{
+        total = $sorted.Count
+        truncated = ($sorted.Count -gt $Limit)
+        members = @($sorted | Select-Object -First $Limit)
+        lookupMethod = 'ADSI'
+        lookupNote = $originalError
+    }
+}
+
 # All local group lookups use invariant SIDs, so they work on RU/EN Windows.
 function Get-LocalAccessAudit {
     $localUsers = Capture {
@@ -66,17 +131,7 @@ function Get-LocalAccessAudit {
     )) {
         $sid = $entry.sid
         $groups[$entry.name] = Capture {
-            $sidObject = New-Object System.Security.Principal.SecurityIdentifier($sid)
-            $members = @(Get-LocalGroupMember -SID $sidObject -ErrorAction Stop | Sort-Object Name)
-            $items = @($members | Select-Object -First 40 | ForEach-Object {
-                [ordered]@{
-                    name = $_.Name
-                    objectClass = [string]$_.ObjectClass
-                    principalSource = [string]$_.PrincipalSource
-                    sid = [string]$_.SID
-                }
-            })
-            [ordered]@{ total=$members.Count; truncated=($members.Count -gt 40); members=$items }
+            Get-GroupMembersSafe -GroupSid $sid -Limit 40
         }
     }
     $session = Capture {
@@ -127,14 +182,11 @@ function Get-QuickInventory {
         })
     }
     $admins=Capture {
-        $sid=New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
-        $members=@(Get-LocalGroupMember -SID $sid -ErrorAction Stop |
-            Select-Object -First 12 Name, ObjectClass, PrincipalSource)
-        [ordered]@{total=$members.Count;members=$members;truncated=$false}
+        Get-GroupMembersSafe -GroupSid 'S-1-5-32-544' -Limit 12
     }
     $firewall=Capture { @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled) }
     return [ordered]@{
-        schemaVersion=1;collectorVersion='0.4.0';mode='fast'
+        schemaVersion=1;collectorVersion='0.4.1';mode='fast'
         collectedAt=(Get-Date).ToUniversalTime().ToString('o')
         system=[ordered]@{
             computerName=$env:COMPUTERNAME
@@ -302,7 +354,7 @@ function Get-Inventory {
 
     return [ordered]@{
         schemaVersion = 1
-        collectorVersion = '0.4.0'
+        collectorVersion = '0.4.1'
         mode = 'full'
         collectedAt = (Get-Date).ToUniversalTime().ToString('o')
         system = $system
