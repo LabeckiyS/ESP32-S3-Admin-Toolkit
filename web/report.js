@@ -133,10 +133,10 @@ function formatTechnicalReport(data) {
   });
   sectionList('IP, шлюзы и DNS', object(data.network).ipConfig, (r,i) => {
     item(i, r.interfaceAlias);
-    details([['IPv4',array(r.ipv4).join(', ')||'—'],
-      ['IPv6',array(r.ipv6).join(', ')||'—'],
-      ['Шлюз',array(r.gateway).join(', ')||'—'],
-      ['DNS',array(r.dns).join(', ')||'—'],['DHCP',r.dhcp]]);
+    details([['IPv4',addresses(r.ipv4)],
+      ['IPv6',addresses(r.ipv6)],
+      ['Шлюз',addresses(r.gateway)],
+      ['DNS',addresses(r.dns)],['DHCP',r.dhcp]]);
   });
   sectionList('Профили сети', object(data.network).profiles, (r,i) => {
     item(i, r.InterfaceAlias);
