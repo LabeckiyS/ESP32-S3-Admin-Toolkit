@@ -86,12 +86,14 @@
         </select>
       </label>
       <p class="muted small">Быстрая проверка не запрашивает подробные списки PnP, программ, служб и журналов Windows. Расширенная передаёт больше данных.</p>
-      <div class="toolbar wrap"><button id="run" disabled>Старт проверки</button><button class="secondary" id="get" disabled>Получить отчёт</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
+      <div class="toolbar wrap"><button id="run" disabled>Старт проверки</button><button class="secondary" id="get" disabled>Последний отчёт ESP32</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
+      <p class="muted small">«Последний отчёт ESP32» читает данные из памяти прибора и не запускает проверку текущего ПК. Если новая диагностика завершилась ошибкой, здесь может остаться отчёт другого компьютера.</p>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
       <div class="muted small" id="detail">Компьютер пока не обследован.</div>
     </section>
     <section class="card" id="summary" hidden>
       <h2>Технический отчёт ПК</h2>
+      <p class="muted small" id="report-origin" role="status" aria-live="polite">Отчёт из памяти ESP32; сверяй имя ПК и время сбора.</p>
       <p class="muted small">Отчёт представлен обычным текстом. Можно выделить его вручную или нажать кнопку копирования. Скачивание файлов не используется.</p>
       <textarea id="report-text" readonly rows="22" spellcheck="false" aria-label="Полный технический отчёт для копирования"></textarea>
       <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать весь отчёт</button></div>
@@ -103,7 +105,7 @@
   <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
 <script src="report.js?v=040" defer></script>
-<script src="app.js?v=040" defer></script>
+<script src="app.js?v=041" defer></script>
 <script src="keyboard.js?v=040" defer></script>
 </body>
 </html>
