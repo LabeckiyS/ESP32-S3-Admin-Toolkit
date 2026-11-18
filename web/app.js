@@ -5,6 +5,8 @@ const RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 const TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 const $ = id => document.getElementById(id);
 let device = null, rx = null, tx = null, current = null, report = null;
+// A persisted report is never considered fresh merely because GET succeeded.
+let scanPending = false, scanCompletedThisConnection = false;
 let writeQueue = Promise.resolve();
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const encoder = new TextEncoder();
@@ -96,13 +98,17 @@ function onFrame(event) {
       $('detail').textContent = 'На ПК выбрана RUS. Переключи язык вручную на ENG и выбери ENG в панели.';
       log($('detail').textContent);
     } else log('Ошибка устройства: ' + message.slice(2));
+    if (scanPending) { scanPending = false; scanCompletedThisConnection = false; }
     current = null; ui();
   } else if (message.startsWith('P|')) {
     const phase = message.slice(2);
     const labels = { LAUNCHING: 'Открывается PowerShell на компьютере', BOOTSTRAP: 'Загружается сборщик через USB CDC', COLLECTOR: 'Windows получает сборщик с ESP32', RECEIVING: 'Windows передаёт диагностические данные', DONE: 'Диагностика завершена; получаем отчёт', READY: 'Ожидание' };
     $('detail').textContent = labels[phase] || ('Состояние: ' + phase);
     log($('detail').textContent);
-    if (phase === 'DONE') queueCommand('GET').catch(err => log('GET: ' + err.message));
+    if (phase === 'DONE') {
+      if (scanPending) { scanPending = false; scanCompletedThisConnection = true; }
+      queueCommand('GET').catch(err => log('GET: ' + err.message));
+    }
   } else if (message.startsWith('S|')) {
     log('Размер сохранённого отчёта: ' + message.slice(2));
   } else {
@@ -126,6 +132,15 @@ function finishReport() {
   } catch (err) { log('Ошибка JSON: ' + err.message); }
 }
 function showReport(data) {
+  const computerName = typeof data?.system?.computerName === 'string' ? data.system.computerName : 'не определено';
+  const stamp = typeof data?.collectedAt === 'string' ? data.collectedAt : null;
+  const date = stamp && !Number.isNaN(Date.parse(stamp)) ? new Date(stamp).toLocaleString('ru-RU') : (stamp || 'не определено');
+  const source = scanCompletedThisConnection
+    ? 'Новая диагностика завершилась и передала отчёт в текущем подключении.'
+    : scanPending
+      ? 'ВНИМАНИЕ: новая диагностика ещё не подтверждена. Это последний ранее сохранённый отчёт ESP32, возможно с другого ПК.'
+      : 'Последний сохранённый отчёт ESP32. Он может относиться к другому ПК.';
+  $('report-origin').textContent = source + ' Компьютер: ' + computerName + '. Время сбора: ' + date + '.';
   $('report-text').value = formatTechnicalReport(data);
   $('copy-status').textContent = '';
   $('summary').hidden = false;
@@ -136,6 +151,9 @@ function disconnect() {
   if (device?.gatt?.connected) device.gatt.disconnect();
   device = null;
   rx = null; tx = null; current = null;
+  scanPending = false;
+  scanCompletedThisConnection = false;
+  if (!$('summary').hidden) $('report-origin').textContent = 'Отчёт остался в браузере после отключения. При следующем подключении сверяй имя ПК и время сбора.';
   connecting = false;
   if (typeof onKeyboardAck === 'function') onKeyboardAck(false);
   status('Не подключено', false);
@@ -197,11 +215,18 @@ $('run').addEventListener('click', async () => {
   try {
     const mode = $('scan-mode').value === 'full' ? 'FULL' : 'FAST';
     await queueCommand('RUN|EN|' + mode);
+    scanPending = true;
+    scanCompletedThisConnection = false;
+    if (!$('summary').hidden) $('report-origin').textContent = 'Запущена новая проверка. Отчёт ниже — предыдущий до подтверждения завершения новой диагностики.';
     log('Старт ' + (mode === 'FAST' ? 'быстрой инвентаризации' : 'расширенной диагностики') + ': PowerShell, ENG.');
   } catch (err) { log('RUN: ' + err.message); }
 });
 $('get').addEventListener('click', async () => {
-  try { current = null; progress(0, 1); await queueCommand('GET'); log('Запрошен последний отчёт с ESP32.'); }
+  try {
+    current = null; progress(0, 1);
+    await queueCommand('GET');
+    log('Запрошен последний сохранённый отчёт ESP32 (не обязательно от подключённого ПК).');
+  }
   catch (err) { log('GET: ' + err.message); }
 });
 $('cancel').addEventListener('click', async () => {
