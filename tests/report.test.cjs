@@ -47,8 +47,8 @@ test('Fast report omits phantom volumes and never renders network objects as str
     volumes:[{DeviceID:'C:',SizeBytes:1073741824,FreeBytes:536870912},{DeviceID:'E:',SizeBytes:0,FreeBytes:0}],
     security:{firewall:[{Name:'Domain',Enabled:1},{Name:'Public',Enabled:0}]}
   });
-  assert.doesNotMatch(text, /\\[object Object\\]/);
-  assert.match(text, /192\\.168\\.2\\.41/);
+  assert.ok(!text.includes('[object Object]'));
+  assert.ok(text.includes('192.168.2.41'))
   assert.match(text, /AA-BB-CC-DD-EE-FF/);
   assert.doesNotMatch(text, /E:/);
   assert.match(text, /Включён: да/);
