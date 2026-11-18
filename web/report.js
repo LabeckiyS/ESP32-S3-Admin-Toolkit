@@ -80,8 +80,6 @@ function formatTechnicalReport(data) {
       field('Защита в реальном времени', object(sec.defender).RealTimeProtectionEnabled);
     }
     add('');
-    add('Только инвентаризация: тесты SSD SMART и полноценный аудит прав не проводились.');
-    add('Без BLE-аутентификации не передавай секретные корпоративные сведения.');
     return lines.join('\n');
   }
   const sys = object(data.system), machine = object(sys.machine), os = object(sys.os);
@@ -159,8 +157,6 @@ function formatTechnicalReport(data) {
         ['SID',u.sid]]);
     });
   }
-  add('Важно: «Пароль обязателен» — признак требования Windows, а НЕ проверка фактического наличия непустого пароля.');
-  add('Пароли, хеши паролей и секретные ключи не собираются.');
   const groups = object(access.groups);
   for (const [key,title] of [
     ['administrators','Члены локальной группы Администраторы'],
@@ -177,13 +173,12 @@ function formatTechnicalReport(data) {
     members.forEach((raw,i)=>{const m=object(raw);item(i,m.name);
       details([['Тип',m.objectClass],['Источник',m.principalSource],['SID',m.sid]]);
     });
-    if (gg.truncated) add('ВНИМАНИЕ: список ограничен по размеру');
+    if (gg.truncated) add('Список ограничен по размеру');
   }
   section('Текущий сеанс Windows');
   const session = object(access.currentSession);
   field('Пользователь сеанса',session.account);
   field('Токен содержит роль администратора',session.tokenHasAdministratorsRole);
-  add('Вложенные доменные группы, GPO и фактические права каждой доменной учётной записи не оцениваются.');
   section('Подключённые PnP-устройства');
   const pnp=object(data.pnp);
   if (!unavailable(data.pnp,'PnP')) {
@@ -215,7 +210,6 @@ function formatTechnicalReport(data) {
     avs.forEach((raw,i)=>{const a=object(raw); item(i,a.displayName);
       add('     Код состояния Windows Security Center: '+val(a.productState));
     });
-    add('Код состояния Security Center не является прямой проверкой актуальности лицензии.');
   }
   if(!unavailable(sec.uac,'UAC')){
     const uac=object(sec.uac);
@@ -256,17 +250,10 @@ function formatTechnicalReport(data) {
       item(i,a.DisplayName||a.Name);
       details([['Служба',a.Name],['Состояние',a.State],['Тип запуска',a.StartMode]]);
     });
-    add('Остановленная автослужба не обязательно означает неисправность.');
   }
   sectionList('Ошибки системного журнала за 24 часа',data.systemErrors24h,(r,i)=>{
     item(i,[r.ProviderName,'ID '+val(r.Id)].join(' / '));
     details([['Время',r.TimeCreated],['Уровень',r.LevelDisplayName]]);
   });
-  section('Ограничения и безопасность');
-  add('Отчёт получен через локальный USB CDC и BLE; никаких TXT/JSON файлов отчёта на ПК или телефоне не создаётся.');
-  add('В прошивке JSON остаётся внутренним форматом передачи и временно хранится в LittleFS для повторного получения.');
-  add('Данные некоторых системных подсистем могут быть недоступны без административных прав.');
-  add('Обнаружение вложенных доменных групп и действующего пароля не выполняется.');
-  add('Без BLE-аутентификации данные могут быть доступны находящимся рядом устройствам. Не использовать для секретных данных.');
   return lines.join('\n');
 }
