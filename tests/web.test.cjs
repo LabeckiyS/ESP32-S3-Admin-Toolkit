@@ -165,3 +165,22 @@ test('Compact report displays physical MAC and IPv4', () => {
   assert.match(r.elements.get('report-text').value,/192\.0\.2\.25/);
   assert.match(r.elements.get('report-text').value,/AA-BB-CC-DD-EE-FF/);
 });
+
+test('Saved report is explicitly marked as potentially from another PC', () => {
+  const r = makeRuntime();
+  r.get("showReport({mode:'fast',collectedAt:'2026-11-18T04:47:43Z',system:{computerName:'OLD-PC'}})");
+  assert.match(r.elements.get('report-origin').textContent, /Последний сохранённый отчёт/);
+  assert.match(r.elements.get('report-origin').textContent, /OLD-PC/);
+});
+
+test('Failed or unfinished new scan never marks old report as fresh', async () => {
+  const r = makeRuntime();
+  r.elements.get('pc-layout').value='en';
+  await r.elements.get('run').click();
+  r.get("showReport({mode:'fast',system:{computerName:'OLD-PC'}})");
+  assert.match(r.elements.get('report-origin').textContent, /ещё не подтверждена/);
+  r.send(new TextEncoder().encode('P|DONE'));
+  r.get("showReport({mode:'fast',system:{computerName:'NEW-PC'}})");
+  assert.match(r.elements.get('report-origin').textContent, /Новая диагностика завершилась/);
+  assert.match(r.elements.get('report-origin').textContent, /NEW-PC/);
+});
