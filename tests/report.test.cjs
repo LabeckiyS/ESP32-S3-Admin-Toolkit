@@ -21,7 +21,7 @@ test('Report includes network MACs and local admin membership', () => {
   for (const part of ['LAPTOP-TEST', '12-34-56-78-9A-BC',
     'operator', 'Пароль обязателен: нет', 'USB Mouse',
     'Члены локальной группы Администраторы'.toUpperCase()]) assert.ok(text.includes(part), part);
-  assert.match(text,/НЕ проверка фактического наличия/);
+  assert.doesNotMatch(text, /Без BLE|Ограничения и безопасность|не передавай|НЕ проверка фактического наличия/i);
 });
 
 test('Missing and inaccessible data are labelled, not invented', () => {
@@ -54,4 +54,13 @@ test('Fast report omits phantom volumes and never renders network objects as str
   assert.match(text, /Включён: да/);
   assert.match(text, /Включён: нет/);
   assert.match(text, /Антивирус: не проверяется в быстром режиме/);
+});
+
+
+test('Fast and full report contain no operator security disclaimers', () => {
+  const fast = format({mode:'fast',system:{computerName:'TEST-FAST'},security:{firewall:[]}});
+  const full = format({mode:'full',system:{computerName:'TEST-FULL'},security:{firewall:[]}});
+  for (const text of [fast, full]) {
+    assert.doesNotMatch(text, /BLE-аутентификации|не передавай|Ограничения и безопасность|Не использовать для секретных/i);
+  }
 });
