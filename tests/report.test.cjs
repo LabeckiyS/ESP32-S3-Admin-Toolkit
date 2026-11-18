@@ -64,3 +64,21 @@ test('Fast and full report contain no operator security disclaimers', () => {
     assert.doesNotMatch(text, /BLE-аутентификации|не передавай|Ограничения и безопасность|Не использовать для секретных/i);
   }
 });
+
+test('Full report renders disconnected or unavailable IPv6 as a dash, not an object', () => {
+  const text = format({
+    mode:'full',
+    system:{computerName:'RUSAGRO-TEST'},
+    network:{ipConfig:[{
+      interfaceAlias:'Ethernet',
+      ipv4:['192.168.80.81'],
+      ipv6:[{unavailable:true}],
+      gateway:['192.168.80.1'],
+      dns:['10.3.251.11','10.1.8.10']
+    }]}
+  });
+  assert.ok(text.includes('IPv4: 192.168.80.81'));
+  assert.ok(text.includes('IPv6: —'));
+  assert.ok(text.includes('DNS: 10.3.251.11, 10.1.8.10'));
+  assert.ok(!text.includes('[object Object]'));
+});
