@@ -16,6 +16,9 @@ function formatTechnicalReport(data) {
   };
   const object = x => x && typeof x === 'object' && !Array.isArray(x) && !x.unavailable ? x : {};
   const array = x => Array.isArray(x) ? x : x == null || x.unavailable ? [] : [x];
+  // IP/gateway/DNS properties are string arrays. Never stringify arbitrary error objects.
+  const addresses = x => array(x).filter(v => typeof v === 'string' && v.trim()).join(', ') || '—';
+  const enabled = x => x === 1 || x === true ? 'да' : x === 0 || x === false ? 'нет' : val(x);
   const bytes = x => typeof x === 'number' && Number.isFinite(x) ? (x / 1073741824).toFixed(2) + ' ГБ' : val(x);
   const field = (name, x) => add(name + ': ' + val(x));
   const section = (title) => { add(''); add('=== ' + title.toUpperCase() + ' ==='); };
@@ -48,7 +51,10 @@ function formatTechnicalReport(data) {
     sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
     sectionList('Оперативная память',data.ram,(r,i)=>{item(i,r.DeviceLocator);details([['Объём',bytes(r.CapacityBytes)],['МГц',r.Speed]]);});
     sectionList('Накопители',data.disks,(r,i)=>{item(i,r.Model);field('Размер',bytes(r.SizeBytes));});
-    sectionList('Разделы',data.volumes,(r,i)=>{item(i,r.DeviceID);details([['Размер',bytes(r.SizeBytes)],['Свободно',bytes(r.FreeBytes)]]);});
+    // Zero-sized phantom volumes are distracting in a quick asset inventory.
+    const volumes = array(data.volumes).filter(r => Number(r.SizeBytes) > 0);
+    sectionList('Разделы', data.volumes?.unavailable ? data.volumes : volumes,
+      (r,i)=>{item(i,r.DeviceID);details([['Размер',bytes(r.SizeBytes)],['Свободно',bytes(r.FreeBytes)]]);});
     sectionList('Видеокарты',data.gpu,(r,i)=>item(i,r.Name));
     section('Физические сетевые адаптеры (MAC / IP / DNS)');
     const nics=array(network.adapters),ips=array(network.ipConfig);
@@ -59,17 +65,20 @@ function formatTechnicalReport(data) {
       item(i,r.Name);
       const ip=object(ips.find(x=>x.interfaceAlias===r.Name));
       details([['Устройство',r.InterfaceDescription],['MAC',r.MacAddress],['Состояние',r.Status],
-        ['IPv4',array(ip.ipv4).join(', ')||'не получен'],['Шлюз',array(ip.gateway).join(', ')||'—'],
-        ['DNS',array(ip.dns).join(', ')||'—'],['DHCP',ip.dhcp],['Скорость',r.LinkSpeed]]);
+        ['IPv4',addresses(ip.ipv4)],['Шлюз',addresses(ip.gateway)],
+        ['DNS',addresses(ip.dns)],['DHCP',ip.dhcp],['Скорость',r.LinkSpeed]]);
     });
     section('Локальные администраторы');
     const group=object(object(access.groups).administrators);
     if (unavailable(object(access.groups).administrators,'Группа')) {}
     else array(group.members).forEach((r,i)=>item(i,r.Name||r.name));
     section('Защита');
-    sectionList('Брандмауэр Windows',sec.firewall,(r,i)=>{item(i,r.Name);field('Включён',r.Enabled);});
-    const defender=object(sec.defender);
-    if(!unavailable(sec.defender,'Defender'))field('Защита в реальном времени',defender.RealTimeProtectionEnabled);
+    sectionList('Брандмауэр Windows',sec.firewall,(r,i)=>{item(i,r.Name);field('Включён',enabled(r.Enabled));});
+    if (!Object.prototype.hasOwnProperty.call(sec, 'defender')) {
+      add('Антивирус: не проверяется в быстром режиме (см. расширенную диагностику)');
+    } else if (!unavailable(sec.defender, 'Антивирус')) {
+      field('Защита в реальном времени', object(sec.defender).RealTimeProtectionEnabled);
+    }
     add('');
     add('Только инвентаризация: тесты SSD SMART и полноценный аудит прав не проводились.');
     add('Без BLE-аутентификации не передавай секретные корпоративные сведения.');
