@@ -29,3 +29,29 @@ test('Missing and inaccessible data are labelled, not invented', () => {
   assert.match(text,/нет доступа/);
   assert.match(text,/не определено/);
 });
+
+test('Fast report omits phantom volumes and never renders network objects as strings', () => {
+  const text = format({
+    mode:'fast',
+    system: {computerName:'TEST-PC',os:{caption:'Windows 11'},machine:{totalMemory:17179869184}},
+    network: {
+      adapters:[
+        {Name:'Ethernet',MacAddress:'11-22-33-44-55-66',Status:'Disconnected'},
+        {Name:'Wi-Fi',MacAddress:'AA-BB-CC-DD-EE-FF',Status:'Up'}
+      ],
+      ipConfig:[
+        {interfaceAlias:'Ethernet',ipv4:[{unavailable:true}],gateway:[{unavailable:true}],dns:[{unavailable:true}]},
+        {interfaceAlias:'Wi-Fi',ipv4:['192.168.2.41'],gateway:['192.168.2.1'],dns:['192.168.2.1'],dhcp:true}
+      ]
+    },
+    volumes:[{DeviceID:'C:',SizeBytes:1073741824,FreeBytes:536870912},{DeviceID:'E:',SizeBytes:0,FreeBytes:0}],
+    security:{firewall:[{Name:'Domain',Enabled:1},{Name:'Public',Enabled:0}]}
+  });
+  assert.doesNotMatch(text, /\\[object Object\\]/);
+  assert.match(text, /192\\.168\\.2\\.41/);
+  assert.match(text, /AA-BB-CC-DD-EE-FF/);
+  assert.doesNotMatch(text, /E:/);
+  assert.match(text, /Включён: да/);
+  assert.match(text, /Включён: нет/);
+  assert.match(text, /Антивирус: не проверяется в быстром режиме/);
+});
