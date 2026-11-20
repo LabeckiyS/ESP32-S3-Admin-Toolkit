@@ -49,7 +49,7 @@ function start() {
   };
   vm.createContext(env);
   vm.runInContext(source, env);
-  return {pad, rightButton, packets, setClock(value) { now = value; }};
+  return {pad, rightButton, packets, elements, setClock(value) { now = value; }};
 }
 
 test('Short tap sends only left click', () => {
@@ -83,4 +83,19 @@ test('Touchpad suppresses browser context menu and does not render keyboard jour
   assert.equal(html.includes('id="keyboard-log"'), false);
   assert.equal(html.includes('Журнал клавиатуры'), false);
   assert.equal(html.includes('удержание — правый клик'), false);
+});
+
+
+test('Clear text button removes long drafts locally without sending HID packets', () => {
+  const r = start();
+  const input = r.elements.get('keyboard-text');
+  const clear = r.elements.get('clear-text');
+  assert.match(html, /id="clear-text"[^>]*>Очистить поле/);
+  assert.match(html, /id="send-text"[\\s\\S]*id="clear-text"/);
+  input.value = 'Длинный скрипт '.repeat(300);
+  clear.fire('click');
+  assert.equal(input.value, '');
+  assert.deepEqual(r.packets, []);
+  // Remains useful with BLE disconnected; the clear button is not a hid-control.
+  assert.ok(!html.includes('hid-control" id="clear-text"'));
 });
