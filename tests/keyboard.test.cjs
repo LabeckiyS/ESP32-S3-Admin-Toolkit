@@ -49,7 +49,7 @@ function start() {
   };
   vm.createContext(env);
   vm.runInContext(source, env);
-  return {pad, rightButton, packets, elements, setClock(value) { now = value; }};
+  return {pad, rightButton, packets, elements, getElement(id) { return document.getElementById(id); }, setClock(value) { now = value; }};
 }
 
 test('Short tap sends only left click', () => {
@@ -88,10 +88,10 @@ test('Touchpad suppresses browser context menu and does not render keyboard jour
 
 test('Clear text button removes long drafts locally without sending HID packets', () => {
   const r = start();
-  const input = r.elements.get('keyboard-text');
-  const clear = r.elements.get('clear-text');
+  const input = r.getElement('keyboard-text');
+  const clear = r.getElement('clear-text');
   assert.match(html, /id="clear-text"[^>]*>Очистить поле/);
-  assert.match(html, /id="send-text"[\\s\\S]*id="clear-text"/);
+  assert.ok(html.indexOf('id="send-text"') < html.indexOf('id="clear-text"'));
   input.value = 'Длинный скрипт '.repeat(300);
   clear.fire('click');
   assert.equal(input.value, '');
