@@ -47,6 +47,12 @@ async function sendKeyboardText() {
   }
 }
 document.getElementById('send-text').addEventListener('click', sendKeyboardText);
+// Clear only the phone's draft, without sending any HID key or BLE packet.
+document.getElementById('clear-text').addEventListener('click', () => {
+  const field = document.getElementById('keyboard-text');
+  field.value = '';
+  field.focus?.();
+});
 for (const el of document.querySelectorAll('.key-action')) {
   el.addEventListener('click', async () => {
     try { await queueCommand('K|' + el.dataset.key); }
