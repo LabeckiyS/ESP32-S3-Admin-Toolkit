@@ -99,3 +99,9 @@ test('Clear text button removes long drafts locally without sending HID packets'
   // Remains useful with BLE disconnected; the clear button is not a hid-control.
   assert.ok(!html.includes('hid-control" id="clear-text"'));
 });
+
+test('Enter after text is unchecked by default but remains optional', () => {
+  assert.match(html, /<input type="checkbox" id="send-enter"> Enter после текста/);
+  assert.doesNotMatch(html, /<input[^>]+id="send-enter"[^>]*checked/);
+  assert.match(source, /getElementById\('send-enter'\)\.checked/);
+});
