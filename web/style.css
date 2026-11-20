@@ -23,3 +23,7 @@ textarea{width:100%;max-width:100%;resize:vertical;background:#0a111d;color:#e7e
 
 /* Plain, selectable technical passport; text is not a download. */
 #report-text{display:block;width:100%;min-height:55vh;max-height:70vh;resize:vertical;overflow:auto;white-space:pre;user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+
+/* Send and clear actions stay side-by-side; both wrap safely on small phones. */
+.text-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;max-width:100%}
+@media(max-width:420px){.text-actions{width:100%}.text-actions button{flex:1 1 auto}}
