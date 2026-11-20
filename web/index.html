@@ -12,7 +12,7 @@
 <main>
   <header>
     <div class="eyebrow">ESP32-S3 / BLE-ONLY</div>
-    <h1>Admin Toolkit <span>Web v0.3.9</span></h1>
+    <h1>Admin Toolkit</h1>
     <p>Беспроводная клавиатура, мышь и диагностика Windows в одной панели.</p>
     <p><a class="installer-link" href="./install.html">Установить или обновить прошивку через USB</a></p>
   </header>
@@ -31,7 +31,10 @@
       <h2>Текст</h2>
       <textarea id="keyboard-text" rows="5" placeholder="Введите текст для компьютера…"></textarea>
       <div class="toolbar wrap">
-        <button class="hid-control" id="send-text" disabled>Отправить текст</button>
+        <div class="text-actions">
+          <button type="button" class="hid-control" id="send-text" disabled>Отправить текст</button>
+          <button type="button" class="secondary" id="clear-text">Очистить поле</button>
+        </div>
         <label class="inline-label"><input type="checkbox" id="send-enter" checked> Enter после текста</label>
       </div>
       <p class="muted small">Выбирай раскладку ENG или RUS на самом компьютере перед отправкой соответствующего текста.</p>
@@ -106,6 +109,6 @@
 </main>
 <script src="report.js?v=043" defer></script>
 <script src="app.js?v=041" defer></script>
-<script src="keyboard.js?v=040" defer></script>
+<script src="keyboard.js?v=041" defer></script>
 </body>
 </html>
