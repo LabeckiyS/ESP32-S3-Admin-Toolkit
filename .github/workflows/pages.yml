@@ -37,5 +37,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # Give GitHub's artifact API time to index the just-uploaded artifact.
+      # deploy-pages can otherwise fail with "Found 0 artifact(s)".
+      - name: Wait for Pages artifact registration
+        run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4
