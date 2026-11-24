@@ -426,7 +426,15 @@ void keyboardCommand(const String &cmd) {
   else if (cmd == "CONTEXT_MENU") tapShortcut(KEY_LEFT_SHIFT, KEY_F10);
   else if (cmd == "PROPERTIES") tapShortcut(KEY_LEFT_ALT, KEY_RETURN);
   else if (cmd == "WIN") tapShortcut(KEY_LEFT_GUI, ' ');
-  // Ctrl+Alt+Del is a Windows secure attention sequence: not emulated.
+  else if (cmd == "CTRL_ALT_DEL") {
+    // Sent by the ESP32's physical USB HID keyboard, not through Windows APIs.
+    keyboard.press(KEY_LEFT_CTRL);
+    keyboard.press(KEY_LEFT_ALT);
+    keyboard.press(KEY_DELETE);
+    delay(100);
+    keyboard.releaseAll();
+    delay(8);
+  }
 }
 
 void applyMouse(const InputPacket &item) {
