@@ -35,9 +35,15 @@ function start() {
   elements.set('sensitivity', makeElement());
   elements.set('sensitivity-value', makeElement());
   const rightButton = makeElement(); rightButton.dataset.button = '2';
+  const secureButton = makeElement(); secureButton.dataset.key = 'CTRL_ALT_DEL';
+  const commands = [];
   const document = {
     getElementById(id) { if (!elements.has(id)) elements.set(id, makeElement()); return elements.get(id); },
-    querySelectorAll(sel) { if (sel === '.mouse-button') return [rightButton]; return []; }
+    querySelectorAll(sel) {
+      if (sel === '.mouse-button') return [rightButton];
+      if (sel === '.key-action') return [secureButton];
+      return [];
+    }
   };
   const env = {
     document, console, Uint8Array, TextEncoder,
@@ -45,11 +51,11 @@ function start() {
     setTimeout, clearTimeout, setInterval: () => 0,
     rx: { connected: true },
     queueBytes: async payload => { packets.push(Array.from(payload)); },
-    queueCommand: async () => {}
+    queueCommand: async text => { commands.push(text); }
   };
   vm.createContext(env);
   vm.runInContext(source, env);
-  return {pad, rightButton, packets, elements, getElement(id) { return document.getElementById(id); }, setClock(value) { now = value; }};
+  return {pad, rightButton, secureButton, packets, commands, elements, getElement(id) { return document.getElementById(id); }, setClock(value) { now = value; }};
 }
 
 test('Short tap sends only left click', () => {
@@ -104,4 +110,19 @@ test('Enter after text is unchecked by default but remains optional', () => {
   assert.match(html, /<input type="checkbox" id="send-enter"> Enter после текста/);
   assert.doesNotMatch(html, /<input[^>]+id="send-enter"[^>]*checked/);
   assert.match(source, /getElementById\('send-enter'\)\.checked/);
+});
+
+test('Ctrl+Alt+Del button sends one explicit USB HID shortcut request', async () => {
+  assert.match(html, /data-key="CTRL_ALT_DEL"[^>]*>Ctrl \+ Alt \+ Del/);
+  const r = start();
+  await r.secureButton.fire('click');
+  assert.deepEqual(r.commands, ['K|CTRL_ALT_DEL']);
+  assert.deepEqual(r.packets, []);
+  const firmware = fs.readFileSync(path.join(__dirname, '../firmware/src/main.cpp'), 'utf8');
+  assert.match(firmware, /cmd == "CTRL_ALT_DEL"/);
+  const shortcut = firmware.split('cmd == "CTRL_ALT_DEL"')[1].split('\\n  }')[0];
+  assert.match(shortcut, /keyboard\.press\(KEY_LEFT_CTRL\)/);
+  assert.match(shortcut, /keyboard\.press\(KEY_LEFT_ALT\)/);
+  assert.match(shortcut, /keyboard\.press\(KEY_DELETE\)/);
+  assert.match(shortcut, /keyboard\.releaseAll\(\)/);
 });
