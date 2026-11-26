@@ -47,11 +47,11 @@ function formatTechnicalReport(data) {
     sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
     sectionList('Оперативная память',data.ram,(r,i)=>{
       item(i,r.DeviceLocator);
-      details([['Тип',r.MemoryType],['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed]]);
+      details([['Тип',r.MemoryType === 'Unknown' ? 'не определён' : r.MemoryType],['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed]]);
     });
     sectionList('Физические диски',data.disks,(r,i)=>{
       item(i,r.Model);
-      details([['Тип',r.DiskType],['Интерфейс',r.BusType],['Объём',bytes(r.SizeBytes)]]);
+      details([['Тип',r.DiskType === 'Unknown' ? 'не определён' : (r.DiskType === 'SSD (bus unknown)' ? 'SSD (интерфейс не определён)' : r.DiskType)],['Интерфейс',r.BusType],['Объём',bytes(r.SizeBytes)]]);
     });
     section('Физические сетевые адаптеры');
     if (!unavailable(net.adapters,'Сетевые карты')) {
