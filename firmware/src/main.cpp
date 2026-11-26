@@ -62,6 +62,7 @@ volatile int32_t ackedSeq = -1;
 volatile bool requestStatus = false;
 volatile bool requestRun = false;
 volatile bool requestRunFull = false;
+volatile bool requestRunHardware = false;
 volatile bool requestEnglishRequired = false;
 bool hidBusy = false;
 
@@ -275,7 +276,8 @@ class RxEvents : public BLECharacteristicCallbacks {
       // Never toggle the Windows input layout, even for legacy browser clients.
       requestEnglishRequired = true;
     }
-    else if (s == "RUN|EN|FULL") { requestRunFull = true; requestRun = true; }
+    else if (s == "RUN|EN|HARDWARE") { requestRunHardware = true; requestRunHardware = false; requestRunFull = false; requestRun = true; }
+    else if (s == "RUN|EN|FULL") { requestRunHardware = false; requestRunFull = true; requestRun = true; }
     else if (s == "RUN" || s == "RUN|EN" || s == "RUN|EN|FAST") {
       // Caller confirms Windows ENG. Default to the compact report.
       requestRunFull = false; requestRun = true;
@@ -482,7 +484,7 @@ void launchCollector(bool full) {
   delay(5000);
   // Build script is read from the device's CDC port, SHA-256 checked, written
   // to local TEMP, then run as a file. No execution-policy bypass or elevation.
-  typeAscii(full ? kBootstrapFull : kBootstrapFast);
+  typeAscii(requestRunHardware ? kBootstrapHardware : (full ? kBootstrapFull : kBootstrapFast));
   hidTap(KEY_RETURN);
   diagnosticStage = "BOOTSTRAP";
   notifyText("P|BOOTSTRAP");
@@ -681,6 +683,7 @@ void loop() {
     bool full = requestRunFull;
     requestRunFull = false;
     launchCollector(full);
+    requestRunHardware = false;
   }
   pollAdvertisingRecovery();
   pollTransfer();
