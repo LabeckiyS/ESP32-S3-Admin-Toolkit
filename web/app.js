@@ -127,6 +127,12 @@ function finishReport() {
   try {
     report = { object: JSON.parse(decoder.decode(bytes)), bytes };
     showReport(report.object);
+    // Only a newly completed and CRC-verified hardware scan is auto-registered.
+    if (scanCompletedThisConnection && report.object.mode === 'hardware' &&
+        typeof addHardwareToRegistry === 'function') {
+      addHardwareToRegistry(report.object);
+      scanCompletedThisConnection = false;
+    }
     progress(t.size, t.size);
     $('detail').textContent = `Проверен CRC32 · ${t.size} байт · данные получены`; log('Отчёт получен и проверен.');
   } catch (err) { log('Ошибка JSON: ' + err.message); }
@@ -144,6 +150,7 @@ function showReport(data) {
   $('report-text').value = formatTechnicalReport(data);
   $('copy-status').textContent = '';
   $('summary').hidden = false;
+  $('add-to-registry').hidden = data?.mode !== 'hardware';
 }
 function disconnect() {
   if (tx?.removeEventListener) tx.removeEventListener('characteristicvaluechanged', onFrame);
@@ -213,12 +220,13 @@ $('run').addEventListener('click', async () => {
     return;
   }
   try {
-    const mode = $('scan-mode').value === 'full' ? 'FULL' : 'FAST';
+    const mode = $('scan-mode').value === 'hardware' ? 'HARDWARE' :
+      ($('scan-mode').value === 'full' ? 'FULL' : 'FAST');
     await queueCommand('RUN|EN|' + mode);
     scanPending = true;
     scanCompletedThisConnection = false;
     if (!$('summary').hidden) $('report-origin').textContent = 'Запущена новая проверка. Отчёт ниже — предыдущий до подтверждения завершения новой диагностики.';
-    log('Старт ' + (mode === 'FAST' ? 'быстрой инвентаризации' : 'расширенной диагностики') + ': PowerShell, ENG.');
+    log('Старт ' + (mode === 'HARDWARE' ? 'инвентаризации железа и IP' : mode === 'FAST' ? 'быстрой инвентаризации' : 'расширенной диагностики') + ': PowerShell, ENG.');
   } catch (err) { log('RUN: ' + err.message); }
 });
 $('get').addEventListener('click', async () => {
