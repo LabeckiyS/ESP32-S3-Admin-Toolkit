@@ -35,7 +35,8 @@ bootstrap = (
     "}finally{$s.Dispose()}"
 )
 bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
-if not bootstrap.isascii() or not bootstrap_full.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
+bootstrap_hardware = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Hardware -MaxPnpDevices 0')
+if not bootstrap.isascii() or not bootstrap_full.isascii() or not bootstrap_hardware.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
     raise ValueError('Invalid bootstrap')
 # A fixed raw string is easier to audit than hand-escaped C literals.
 result.parent.mkdir(parents=True,exist_ok=True)
@@ -46,6 +47,7 @@ text = (
     + '\n'.join('  '+json.dumps(b64[i:i+128]) for i in range(0,len(b64),128))+';\n'
     'static const char kBootstrapFast[] PROGMEM = R"BOOT('+bootstrap+')BOOT";\n'
     'static const char kBootstrapFull[] PROGMEM = R"BOOT('+bootstrap_full+')BOOT";\n'
+     'static const char kBootstrapHardware[] PROGMEM = R"BOOT('+bootstrap_hardware+')BOOT";\n'
 )
 result.write_text(text,encoding='utf-8')
 print('Embedded Windows collector:',len(source),'bytes; bootstrap:',len(bootstrap),'HID characters; SHA256:',sha)
