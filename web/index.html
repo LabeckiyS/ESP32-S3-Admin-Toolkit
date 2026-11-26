@@ -74,7 +74,7 @@
 
   <div id="diagnostics-panel" hidden>
     <section class="card">
-      <h2>Диагностика Windows · v0.4.0</h2>
+      <h2>Диагностика Windows</h2>
       <p class="muted small">Подключи T-Dongle-S3 к разблокированному Windows-ПК. Устройство не меняет язык Windows автоматически.</p>
       <label class="inline-label layout-selector" for="pc-layout">Раскладка, выбранная на компьютере:
         <select id="pc-layout" class="layout-select">
@@ -85,11 +85,12 @@
       <p class="muted small">При RUS запуск заблокирован во избежание ошибочного ввода команды. Переключи раскладку на самом ПК, затем выбери ENG здесь. Автоматического Win+Space нет.</p>
       <label class="inline-label layout-selector" for="scan-mode">Режим проверки:
         <select id="scan-mode" class="layout-select">
-          <option value="fast" selected>Быстрая инвентаризация — основные характеристики, IP/MAC</option>
+          <option value="hardware" selected>Железо и IP — для реестра ПК</option>
+          <option value="fast">Быстрая инвентаризация — основные характеристики, IP/MAC</option>
           <option value="full">Расширенная диагностика — ПО, устройства, ошибки и безопасность</option>
         </select>
       </label>
-      <p class="muted small">Быстрая проверка не запрашивает подробные списки PnP, программ, служб и журналов Windows. Расширенная передаёт больше данных.</p>
+      <p class="muted small">«Железо и IP» собирает только CPU, планки ОЗУ, физические диски и сетевые адреса. Другие режимы сохранены.</p>
       <div class="toolbar wrap"><button id="run" disabled>Старт проверки</button><button class="secondary" id="get" disabled>Последний отчёт ESP32</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
       <p class="muted small">«Последний отчёт ESP32» читает данные из памяти прибора и не запускает проверку текущего ПК. Если новая диагностика завершилась ошибкой, здесь может остаться отчёт другого компьютера.</p>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
@@ -100,16 +101,31 @@
       <p class="muted small" id="report-origin" role="status" aria-live="polite">Отчёт из памяти ESP32; сверяй имя ПК и время сбора.</p>
       <p class="muted small">Отчёт представлен обычным текстом. Можно выделить его вручную или нажать кнопку копирования. Скачивание файлов не используется.</p>
       <textarea id="report-text" readonly rows="22" spellcheck="false" aria-label="Полный технический отчёт для копирования"></textarea>
-      <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать весь отчёт</button></div>
+      <div class="toolbar wrap"><button id="copy-report" class="secondary">Копировать весь отчёт</button><button id="add-to-registry" class="secondary" hidden>Добавить ПК в реестр</button></div>
       <p class="muted small" id="copy-status" role="status"></p>
+    </section>
+    <section class="card" id="registry-panel">
+      <h2>Реестр компьютеров</h2>
+      <p class="muted small">После новой успешной проверки «Железо и IP» ПК автоматически добавляется в реестр на этом телефоне. Повторная проверка того же компьютера обновляет запись.</p>
+      <p class="muted" id="registry-count">В реестре: 0 ПК</p>
+      <div class="toolbar wrap">
+        <button type="button" id="registry-export">Скачать Excel (.xlsx)</button>
+        <button type="button" class="secondary" id="registry-clear">Очистить реестр</button>
+      </div>
+      <p class="muted small" id="registry-status" role="status"></p>
+      <div class="registry-scroll"><table class="registry-table" aria-label="Реестр компьютеров">
+        <thead><tr><th>Имя ПК</th><th>Процессор</th><th>ОЗУ</th><th>Диски</th><th>IPv4</th><th>MAC</th><th>Дата</th><th></th></tr></thead>
+        <tbody id="registry-rows"></tbody>
+      </table></div>
     </section>
     <section class="card"><h2>Журнал диагностики</h2><pre id="log" aria-live="polite">Ожидается подключение устройства.</pre></section>
     <p class="foot">Диагностика запускается кнопкой «Старт» на разблокированном компьютере. Результаты доступны для копирования из технического отчёта.</p>
   </div>
   <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
-<script src="report.js?v=043" defer></script>
-<script src="app.js?v=041" defer></script>
+<script src="report.js?v=050" defer></script>
+<script src="inventory.js?v=050" defer></script>
+<script src="app.js?v=050" defer></script>
 <script src="keyboard.js?v=041" defer></script>
 </body>
 </html>
