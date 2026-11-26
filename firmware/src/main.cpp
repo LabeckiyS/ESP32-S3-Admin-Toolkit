@@ -276,7 +276,7 @@ class RxEvents : public BLECharacteristicCallbacks {
       // Never toggle the Windows input layout, even for legacy browser clients.
       requestEnglishRequired = true;
     }
-    else if (s == "RUN|EN|HARDWARE") { requestRunHardware = true; requestRunHardware = false; requestRunFull = false; requestRun = true; }
+    else if (s == "RUN|EN|HARDWARE") { requestRunHardware = true; requestRunFull = false; requestRun = true; }
     else if (s == "RUN|EN|FULL") { requestRunHardware = false; requestRunFull = true; requestRun = true; }
     else if (s == "RUN" || s == "RUN|EN" || s == "RUN|EN|FAST") {
       // Caller confirms Windows ENG. Default to the compact report.
