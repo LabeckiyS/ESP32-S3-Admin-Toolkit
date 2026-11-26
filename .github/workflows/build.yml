@@ -50,3 +50,7 @@ jobs:
         shell: powershell
         run: |
           .\collectors\windows\Collect-Inventory.ps1 -Mode Fast -NoTransfer
+      - name: Run Hardware inventory without USB or report files
+        shell: powershell
+        run: |
+          .\collectors\windows\Collect-Inventory.ps1 -Mode Hardware -NoTransfer
