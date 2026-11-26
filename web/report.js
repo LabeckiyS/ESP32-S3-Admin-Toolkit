@@ -36,6 +36,36 @@ function formatTechnicalReport(data) {
     xs.forEach((v, i) => makeItem(object(v), i));
   };
 
+  if (data.mode === 'hardware') {
+    const sys=object(data.system), board=object(sys.mainboard), net=object(data.network);
+    add('ИНВЕНТАРИЗАЦИЯ ЖЕЛЕЗА И IP');
+    add('==========================');
+    field('Имя ПК',sys.computerName);
+    field('Дата UTC',data.collectedAt);
+    field('Модель',[object(sys.machine).Manufacturer,object(sys.machine).Model].filter(Boolean).join(' '));
+    field('Материнская плата',[board.Manufacturer,board.Product].filter(Boolean).join(' '));
+    sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
+    sectionList('Оперативная память',data.ram,(r,i)=>{
+      item(i,r.DeviceLocator);
+      details([['Тип',r.MemoryType],['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed]]);
+    });
+    sectionList('Физические диски',data.disks,(r,i)=>{
+      item(i,r.Model);
+      details([['Тип',r.DiskType],['Интерфейс',r.BusType],['Объём',bytes(r.SizeBytes)]]);
+    });
+    section('Физические сетевые адаптеры');
+    if (!unavailable(net.adapters,'Сетевые карты')) {
+      const cfg=array(net.ipConfig);
+      array(net.adapters).forEach((r,i)=>{
+        item(i,r.Name);
+        const ip=object(cfg.find(x=>x.interfaceAlias===r.Name));
+        details([['Устройство',r.InterfaceDescription],['Состояние',r.Status],
+          ['MAC',r.MacAddress],['IPv4',addresses(ip.ipv4)]]);
+      });
+    }
+    return lines.join('\n');
+  }
+
   if (data.mode === 'fast') {
     const sys=object(data.system),os=object(sys.os),machine=object(sys.machine);
     const board=object(sys.mainboard),network=object(data.network),access=object(data.localAccess),sec=object(data.security);
