@@ -35,7 +35,7 @@ bootstrap = (
     "}finally{$s.Dispose()}"
 )
 bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
-bootstrap_hardware = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Hardware -MaxPnpDevices 0')
+bootstrap_hardware = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Hardware -MaxPnpDevices 10')
 if not bootstrap.isascii() or not bootstrap_full.isascii() or not bootstrap_hardware.isascii() or '\n' in bootstrap or '\r' in bootstrap or ')BOOT"' in bootstrap:
     raise ValueError('Invalid bootstrap')
 # A fixed raw string is easier to audit than hand-escaped C literals.
