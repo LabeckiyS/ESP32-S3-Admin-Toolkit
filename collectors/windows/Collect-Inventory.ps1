@@ -17,7 +17,7 @@ param(
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'reports'), # Deprecated compatibility parameter; no report files are written.
     [ValidateRange(1,500)][int]$MaxPnpDevices = 120,
     [switch]$IncludeSerialNumbers,
-    [ValidateSet('Fast','Full','Hardware')][string]$Mode = 'Fast'
+    [ValidateSet('Fast','Full')][string]$Mode = 'Fast'
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -150,16 +150,8 @@ function Get-LocalAccessAudit {
     }
 }
 
-# Hardware and IP only: no printers, PnP, local accounts, services, logs or scanners.
-function Get-HardwareInventory {
-    $machine = Capture {
-        Get-CimInstance Win32_ComputerSystem -ErrorAction Stop |
-            Select-Object -First 1 Manufacturer, Model
-    }
-    $board = Capture {
-        Get-CimInstance Win32_BaseBoard -ErrorAction Stop |
-            Select-Object -First 1 Manufacturer, Product
-    }
+# Shared physical hardware facts for Fast and Full diagnostics.
+function Get-HardwareDetails {
     $uuid = Capture {
         (Get-CimInstance Win32_ComputerSystemProduct -ErrorAction Stop |
             Select-Object -First 1).UUID
@@ -171,7 +163,7 @@ function Get-HardwareInventory {
     $ram = Capture {
         @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop |
             Select-Object DeviceLocator, @{N='CapacityBytes';E={[int64]$_.Capacity}},
-                Speed, ConfiguredClockSpeed, SMBIOSMemoryType, MemoryType |
+                Speed, ConfiguredClockSpeed, SMBIOSMemoryType, MemoryType, Manufacturer, PartNumber |
             ForEach-Object {
                 $code = [int]$_.SMBIOSMemoryType
                 if ($code -eq 0) { $code = [int]$_.MemoryType }
@@ -187,6 +179,8 @@ function Get-HardwareInventory {
                         [int]$_.ConfiguredClockSpeed
                     } else { [int]$_.Speed }
                     MemoryType = $type
+                    Manufacturer = [string]$_.Manufacturer
+                    PartNumber = [string]$_.PartNumber
                 }
             })
     }
@@ -223,42 +217,7 @@ function Get-HardwareInventory {
                 })
         }
     }
-    $adapters = Capture {
-        @(Get-NetAdapter -Physical -ErrorAction Stop | Sort-Object Name |
-            Select-Object -First 12 Name, InterfaceDescription, MacAddress, Status, ifIndex)
-    }
-    $ipConfig = Capture {
-        $cfg = @(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True' -ErrorAction Stop)
-        $nics = @(Get-NetAdapter -Physical -ErrorAction Stop |
-            Sort-Object Name | Select-Object -First 12)
-        @($nics | ForEach-Object {
-            $nic = $_
-            $matches = @($cfg | Where-Object { $_.InterfaceIndex -eq $nic.ifIndex })
-            $match = if ($matches.Count) { $matches[0] } else { $null }
-            [ordered]@{
-                interfaceAlias = [string]$nic.Name
-                ipv4 = if ($null -ne $match) {
-                    @($match.IPAddress | Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' })
-                } else { @() }
-            }
-        })
-    }
-    return [ordered]@{
-        schemaVersion = 1
-        collectorVersion = '0.5.0'
-        mode = 'hardware'
-        collectedAt = (Get-Date).ToUniversalTime().ToString('o')
-        system = [ordered]@{
-            computerName = $env:COMPUTERNAME
-            uuid = $uuid
-            machine = $machine
-            mainboard = $board
-        }
-        cpu = $cpu
-        ram = $ram
-        disks = $disks
-        network = [ordered]@{ adapters = $adapters; ipConfig = $ipConfig }
-    }
+    return [ordered]@{ uuid = $uuid; ram = $ram; disks = $disks }
 }
 
 # Compact inventory: avoid PnP, installed software, services and log scans.
@@ -268,10 +227,7 @@ function Get-QuickInventory {
     $board=Capture { Get-CimInstance Win32_BaseBoard -ErrorAction Stop }
     $cpu=Capture { @(Get-CimInstance Win32_Processor -ErrorAction Stop |
         Select-Object -First 2 Name, NumberOfCores, NumberOfLogicalProcessors) }
-    $ram=Capture { @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop |
-        Select-Object DeviceLocator, @{N='CapacityBytes';E={[int64]$_.Capacity}}, Speed) }
-    $disks=Capture { @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop |
-        Select-Object -First 8 Model, @{N='SizeBytes';E={[int64]$_.Size}}) }
+    $hardware = Get-HardwareDetails
     $volumes=Capture { @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop |
         Select-Object -First 8 DeviceID, FileSystem, @{N='SizeBytes';E={[int64]$_.Size}}, @{N='FreeBytes';E={[int64]$_.FreeSpace}}) }
     $gpu=Capture { @(Get-CimInstance Win32_VideoController -ErrorAction Stop | Select-Object -First 2 Name) }
@@ -297,10 +253,11 @@ function Get-QuickInventory {
     }
     $firewall=Capture { @(Get-NetFirewallProfile -ErrorAction Stop | Select-Object Name, Enabled) }
     return [ordered]@{
-        schemaVersion=1;collectorVersion='0.4.2';mode='fast'
+        schemaVersion=1;collectorVersion='0.6.0';mode='fast'
         collectedAt=(Get-Date).ToUniversalTime().ToString('o')
         system=[ordered]@{
             computerName=$env:COMPUTERNAME
+            uuid=$hardware.uuid
             os=if ($os -is [Microsoft.Management.Infrastructure.CimInstance]) {
                 [ordered]@{caption=$os.Caption;version=$os.Version;build=$os.BuildNumber;architecture=$os.OSArchitecture}
             } else {$os}
@@ -311,7 +268,7 @@ function Get-QuickInventory {
                 [ordered]@{manufacturer=$board.Manufacturer;product=$board.Product}
             } else {$board}
         }
-        cpu=$cpu;ram=$ram;disks=$disks;volumes=$volumes;gpu=$gpu
+        cpu=$cpu;ram=$hardware.ram;disks=$hardware.disks;volumes=$volumes;gpu=$gpu
         network=[ordered]@{adapters=$adapters;ipConfig=$ipConfig}
         localAccess=[ordered]@{groups=[ordered]@{administrators=$admins}}
         security=[ordered]@{firewall=$firewall}
@@ -319,6 +276,7 @@ function Get-QuickInventory {
 }
 
 function Get-Inventory {
+    $hardware = Get-HardwareDetails
     $os = Capture { Get-CimInstance Win32_OperatingSystem -ErrorAction Stop }
     $cs = Capture { Get-CimInstance Win32_ComputerSystem -ErrorAction Stop }
     $bios = Capture { Get-CimInstance Win32_BIOS -ErrorAction Stop }
@@ -326,6 +284,7 @@ function Get-Inventory {
 
     $system = [ordered]@{
         computerName = $env:COMPUTERNAME
+        uuid = $hardware.uuid
         os = if ($os -is [Microsoft.Management.Infrastructure.CimInstance]) {
             [ordered]@{ caption = $os.Caption; version = $os.Version; build = $os.BuildNumber; architecture = $os.OSArchitecture; lastBoot = $os.LastBootUpTime }
         } else { $os }
@@ -346,12 +305,6 @@ function Get-Inventory {
 
     $cpu = Capture {
         @(Get-CimInstance Win32_Processor -ErrorAction Stop | Select-Object Name, Manufacturer, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed)
-    }
-    $memory = Capture {
-        @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop | Select-Object DeviceLocator, @{N='CapacityBytes';E={[int64]$_.Capacity}}, Speed, Manufacturer, PartNumber)
-    }
-    $disks = Capture {
-        @(Get-CimInstance Win32_DiskDrive -ErrorAction Stop | Select-Object Model, InterfaceType, MediaType, @{N='SizeBytes';E={[int64]$_.Size}})
     }
     $volumes = Capture {
         @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction Stop | Select-Object DeviceID, FileSystem, VolumeName, @{N='SizeBytes';E={[int64]$_.Size}}, @{N='FreeBytes';E={[int64]$_.FreeSpace}})
@@ -468,14 +421,14 @@ function Get-Inventory {
 
     return [ordered]@{
         schemaVersion = 1
-        collectorVersion = '0.4.2'
+        collectorVersion = '0.6.0'
         mode = 'full'
         collectedAt = (Get-Date).ToUniversalTime().ToString('o')
         system = $system
         localAccess = Get-LocalAccessAudit
         cpu = $cpu
-        ram = $memory
-        disks = $disks
+        ram = $hardware.ram
+        disks = $hardware.disks
         volumes = $volumes
         gpu = $gpu
         monitors = $monitors
@@ -579,7 +532,7 @@ function Send-Inventory([byte[]]$Bytes, [uint32]$Checksum, [string]$ComPort, [Sy
     }
 }
 
-$inventory = if ($Mode -eq 'Hardware') { Get-HardwareInventory } elseif ($Mode -eq 'Fast') { Get-QuickInventory } else { Get-Inventory }
+$inventory = if ($Mode -eq 'Fast') { Get-QuickInventory } else { Get-Inventory }
 $json = ConvertTo-Json -InputObject $inventory -Depth 8 -Compress
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $bytes = $utf8.GetBytes($json)
