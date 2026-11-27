@@ -14,7 +14,7 @@ b64 = base64.b64encode(source).decode("ascii")
 
 # Built-in port selection is intentionally limited to the Espressif USB VID.
 # Do not enumerate, open or transmit to unrelated COM ports (PLC etc.).
-# No network download and no -ExecutionPolicy Bypass.
+# No network download, no permanent policy change and no -ExecutionPolicy Bypass.
 bootstrap = (
     "$ErrorActionPreference='Stop';"
     "$c=@(Get-CimInstance Win32_PnPEntity|?{$_.PNPDeviceID -match 'VID_303A' -and $_.Name -match 'COM[0-9]+'}|%{[regex]::Match($_.Name,'COM[0-9]+').Value});"
@@ -31,7 +31,24 @@ bootstrap = (
     # Windows PowerShell 5.1 decodes BOM-less .ps1 in the local ANSI code page.
     # Keep the SHA-256 check on the original source bytes and add UTF-8 BOM on disk.
     "[IO.File]::WriteAllBytes($f,([byte[]]@(239,187,191)+$a));"
+    # Restricted on an unmanaged workstation would block the hash-verified
+    # local .ps1. Change only this process, without writing CurrentUser or
+    # LocalMachine registry keys, and restore the exact previous Process scope.
+    # An explicit GPO restriction is never overridden.
+    "$old=Get-ExecutionPolicy -Scope Process;$policyChanged=$false;"
+    "try{"
+    "if((Get-ExecutionPolicy) -eq 'Restricted'){"
+    "if((Get-ExecutionPolicy -Scope MachinePolicy) -ne 'Undefined' -or "
+    "(Get-ExecutionPolicy -Scope UserPolicy) -ne 'Undefined'){"
+    "throw 'PowerShell blocked by Group Policy'};"
+    "$policyChanged=$true;"
+    "Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop;"
+    "};"
     "& $f -Port $p -OpenSerial $s -Mode Fast -MaxPnpDevices 10"
+    "}finally{"
+    "if($policyChanged){Set-ExecutionPolicy -Scope Process -ExecutionPolicy $old -Force -ErrorAction Stop};"
+    "Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue"
+    "}"
     "}finally{$s.Dispose()}"
 )
 bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
