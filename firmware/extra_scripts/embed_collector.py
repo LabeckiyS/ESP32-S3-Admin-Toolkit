@@ -43,7 +43,7 @@ bootstrap = (
     "& $f -Port $p -OpenSerial $s -Mode Fast -MaxPnpDevices 10"
     "}finally{try{if($t){Set-ExecutionPolicy -Scope Process $o -Force}}"
     "finally{Remove-Item -LiteralPath $f -Force -ea SilentlyContinue}}"
-    "}finally{$s.Dispose()}"
+    "}finally{$s.Dispose()};exit"
 )
 bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
 bootstrap_hardware = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Hardware -MaxPnpDevices 10')

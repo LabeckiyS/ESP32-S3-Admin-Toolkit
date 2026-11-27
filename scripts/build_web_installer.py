@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENVIRONMENT = "lilygo-tdongle-s3"
-FIRMWARE_VERSION = "0.5.1"
+FIRMWARE_VERSION = "0.5.2"
 FLASH_BYTES = 16 * 1024 * 1024
 
 

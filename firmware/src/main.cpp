@@ -129,7 +129,7 @@ void closeUpload(bool removePartial) {
 }
 
 void usbCommand(const String &line) {
-  if (line == "PING") { usbReply("PONG|0.5.1"); return; }
+  if (line == "PING") { usbReply("PONG|0.5.2"); return; }
   if (line == "SCRIPT") {
     diagnosticStage = "COLLECTOR";
     // Explicitly requested after a BLE RUN; collector payload is build-time pinned.
@@ -599,7 +599,7 @@ void renderDisplay(bool force = false) {
     display.setCursor(2, 12);
     display.print("ADMIN TOOLKIT");
     display.setCursor(2, 22);
-    display.print("  v0.5.1");
+    display.print("  v0.5.2");
     display.setTextColor(ST77XX_WHITE);
     display.setCursor(2, 37);
     display.print("USB: CDC");

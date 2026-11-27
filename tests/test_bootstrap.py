@@ -118,5 +118,17 @@ class BootstrapTests(unittest.TestCase):
             self.assertNotIn("ExecutionPolicy Bypass", bootstrap)
             self.assertIn("Get-FileHash -InputStream", bootstrap)
 
+    def test_console_exits_only_after_collector_and_cleanup(self):
+        text = HEADER.read_text('utf-8')
+        for mode in ('Fast', 'Full', 'Hardware'):
+            bootstrap = text.split('kBootstrap%s[] PROGMEM = R"BOOT(' % mode, 1)[1].split(')BOOT"', 1)[0]
+            self.assertTrue(bootstrap.endswith('}finally{$s.Dispose()};exit'))
+            self.assertLess(bootstrap.index('& $f -Port $p -OpenSerial $s'),
+                            bootstrap.rindex('Set-ExecutionPolicy -Scope Process $o -Force'))
+            self.assertLess(bootstrap.rindex('Set-ExecutionPolicy -Scope Process $o -Force'),
+                            bootstrap.rindex('$s.Dispose()'))
+            self.assertEqual(bootstrap.count(';exit'), 1)
+        self.assertIn('powershell.exe -NoProfile -NoLogo -NoExit', MAIN.read_text('utf-8'))
+
 if __name__ == '__main__':
     unittest.main()
