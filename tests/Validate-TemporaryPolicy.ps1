@@ -43,3 +43,12 @@ try {
 finally {
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy $initialProcess -Force -ErrorAction Stop
 }
+
+# The USB bootstrap hashes original report collector bytes in memory.
+$testStream = [IO.MemoryStream]::new([Text.Encoding]::ASCII.GetBytes('abc'))
+try {
+    $expectedHash = 'BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD'
+    $actualHash = (Get-FileHash -InputStream $testStream -Algorithm SHA256).Hash
+    if ($actualHash -ne $expectedHash) { throw 'Windows PowerShell 5.1 SHA256 test failed' }
+}
+finally { $testStream.Dispose() }

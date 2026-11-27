@@ -101,5 +101,22 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn("queueCommand(fromRussian", web)
         self.assertIn("if ($('pc-layout').value !== 'en')", web)
 
+    def test_temporary_policy_does_not_change_persistent_scopes(self):
+        text = HEADER.read_text('utf-8')
+        for mode in ('Fast', 'Full', 'Hardware'):
+            bootstrap = text.split('kBootstrap%s[] PROGMEM = R"BOOT(' % mode, 1)[1].split(')BOOT"', 1)[0]
+            self.assertIn("Get-ExecutionPolicy -Scope Process", bootstrap)
+            self.assertIn("(Get-ExecutionPolicy) -eq 'Restricted'", bootstrap)
+            self.assertIn("Get-ExecutionPolicy -List", bootstrap)
+            self.assertIn("'*Policy'", bootstrap)
+            self.assertIn("Set-ExecutionPolicy -Scope Process RemoteSigned -Force", bootstrap)
+            self.assertIn("Set-ExecutionPolicy -Scope Process $o -Force", bootstrap)
+            self.assertIn("}finally{", bootstrap)
+            self.assertIn("Remove-Item -LiteralPath $f", bootstrap)
+            self.assertNotIn("-Scope CurrentUser", bootstrap)
+            self.assertNotIn("-Scope LocalMachine", bootstrap)
+            self.assertNotIn("ExecutionPolicy Bypass", bootstrap)
+            self.assertIn("Get-FileHash -InputStream", bootstrap)
+
 if __name__ == '__main__':
     unittest.main()
