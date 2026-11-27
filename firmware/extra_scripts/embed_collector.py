@@ -18,7 +18,7 @@ b64 = base64.b64encode(source).decode("ascii")
 bootstrap = (
     "$ErrorActionPreference='Stop';"
     "$c=@(Get-CimInstance Win32_PnPEntity|?{$_.PNPDeviceID -match 'VID_303A' -and $_.Name -match 'COM[0-9]+'}|%{[regex]::Match($_.Name,'COM[0-9]+').Value});"
-    "if($c.Count -ne 1){throw 'Expected one Espressif CDC COM port'};"
+    "if($c.Count -ne 1){throw 'CDC'};"
     "$p=$c[0];"
     "$s=[IO.Ports.SerialPort]::new($p,115200);"
     "$s.ReadTimeout=15000;$s.DtrEnable=$true;$s.Open();try{"
@@ -26,7 +26,7 @@ bootstrap = (
     "while(($l=$s.ReadLine().Trim()) -ne 'ENDSCRIPT'){$b+=$l};"
     # Same CDC handle is handed to collector, not reopened.
     "$a=[Convert]::FromBase64String($b);"
-    "if(([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($a)).Replace('-','')) -ne '"+sha+"'){throw 'Collector SHA256 mismatch'};"
+    "if((Get-FileHash -InputStream ([IO.MemoryStream]::new($a)) -Algorithm SHA256).Hash -ne '"+sha+"'){throw 'SHA'};"
     "$f=Join-Path $env:TEMP 'AdminToolkit-Collect.ps1';"
     # Windows PowerShell 5.1 decodes BOM-less .ps1 in the local ANSI code page.
     # Keep the SHA-256 check on the original source bytes and add UTF-8 BOM on disk.
@@ -35,20 +35,14 @@ bootstrap = (
     # local .ps1. Change only this process, without writing CurrentUser or
     # LocalMachine registry keys, and restore the exact previous Process scope.
     # An explicit GPO restriction is never overridden.
-    "$old=Get-ExecutionPolicy -Scope Process;$policyChanged=$false;"
-    "try{"
+    "$o=Get-ExecutionPolicy -Scope Process;$t=0;try{"
     "if((Get-ExecutionPolicy) -eq 'Restricted'){"
-    "if((Get-ExecutionPolicy -Scope MachinePolicy) -ne 'Undefined' -or "
-    "(Get-ExecutionPolicy -Scope UserPolicy) -ne 'Undefined'){"
-    "throw 'PowerShell blocked by Group Policy'};"
-    "$policyChanged=$true;"
-    "Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop;"
+    "if(Get-ExecutionPolicy -List|?{$_.Scope -like '*Policy' -and $_.ExecutionPolicy -ne 'Undefined'}){throw 'GPO'};"
+    "$t=1;Set-ExecutionPolicy -Scope Process RemoteSigned -Force;"
     "};"
     "& $f -Port $p -OpenSerial $s -Mode Fast -MaxPnpDevices 10"
-    "}finally{"
-    "if($policyChanged){Set-ExecutionPolicy -Scope Process -ExecutionPolicy $old -Force -ErrorAction Stop};"
-    "Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue"
-    "}"
+    "}finally{try{if($t){Set-ExecutionPolicy -Scope Process $o -Force}}"
+    "finally{Remove-Item -LiteralPath $f -Force -ea SilentlyContinue}}"
     "}finally{$s.Dispose()}"
 )
 bootstrap_full = bootstrap.replace(' -Mode Fast -MaxPnpDevices 10', ' -Mode Full -MaxPnpDevices 25')
