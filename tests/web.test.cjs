@@ -184,3 +184,15 @@ test('Failed or unfinished new scan never marks old report as fresh', async () =
   assert.match(r.elements.get('report-origin').textContent, /Новая диагностика завершилась/);
   assert.match(r.elements.get('report-origin').textContent, /NEW-PC/);
 });
+
+test('Mode select always emits either FAST or FULL, never a third hardware mode', async () => {
+  const r = makeRuntime();
+  r.env.document.getElementById('pc-layout').value='en';
+  r.env.document.getElementById('scan-mode').value='fast';
+  await r.elements.get('run').click();
+  assert.equal(r.env.writes.at(-1),'RUN|EN|FAST');
+  r.env.document.getElementById('scan-mode').value='full';
+  await r.elements.get('run').click();
+  assert.equal(r.env.writes.at(-1),'RUN|EN|FULL');
+  assert.ok(!r.env.writes.some(x=>x.includes('HARDWARE')));
+});

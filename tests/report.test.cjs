@@ -82,3 +82,20 @@ test('Full report renders disconnected or unavailable IPv6 as a dash, not an obj
   assert.ok(text.includes('DNS: 10.3.251.11, 10.1.8.10'));
   assert.ok(!text.includes('[object Object]'));
 });
+
+test('Both basic and extended reports display exact memory and physical disk classification', () => {
+  for (const mode of ['fast','full']) {
+    const text = format({
+      mode, system:{computerName:'TEST-PC'},
+      ram:[{DeviceLocator:'DIMM_1',MemoryType:'DDR4',CapacityBytes:8589934592,Speed:2666,Manufacturer:'Samsung',PartNumber:'XYZ'}],
+      disks:[{Model:'WDC 1TB',DiskType:'HDD',BusType:'SATA',SizeBytes:1000204886016},
+             {Model:'Kingston 500GB',DiskType:'NVMe SSD',BusType:'NVMe',SizeBytes:500107862016}],
+      network:{adapters:[{Name:'Ethernet',MacAddress:'38-D5-47-21-FD-35',Status:'Up'}],
+      ipConfig:[{interfaceAlias:'Ethernet',ipv4:['192.168.80.81']}]}
+    });
+    for(const expected of ['DDR4','2666','WDC 1TB','HDD','Kingston 500GB','NVMe SSD','SATA','192.168.80.81','38-D5-47-21-FD-35']) {
+      assert.ok(text.includes(expected),mode+' missing '+expected);
+    }
+    assert.ok(!text.includes('[object Object]'));
+  }
+});

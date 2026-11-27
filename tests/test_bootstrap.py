@@ -34,6 +34,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertGreater(len(parts), 2)
         data = base64.b64decode(''.join(json.loads(part) for part in parts), validate=True)
         self.assertEqual(data, SOURCE.read_bytes())
+        self.assertIn("[ValidateSet('Fast','Full')]", SOURCE.read_text('utf-8'))
+        self.assertIn('Get-HardwareDetails', SOURCE.read_text('utf-8'))
+        self.assertNotIn('Get-HardwareInventory', SOURCE.read_text('utf-8'))
         digest = hashlib.sha256(data).hexdigest().upper()
         self.assertIn(digest, text)
 
@@ -94,6 +97,8 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn('notifyText("N|ENG_REQUIRED");', text)
         self.assertNotIn('selectEnglishIfRussian', text)
         self.assertIn('launchCollector(full);', text)
+        self.assertNotIn('RUN|EN|HARDWARE', text)
+        self.assertNotIn('kBootstrapHardware', text)
         setup = text[text.index('void setup()') : text.index('void loop()')]
         self.assertNotIn('launchCollector(full);', setup)
         web = WEB.read_text('utf-8')
@@ -103,7 +108,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_temporary_policy_does_not_change_persistent_scopes(self):
         text = HEADER.read_text('utf-8')
-        for mode in ('Fast', 'Full', 'Hardware'):
+        for mode in ('Fast', 'Full'):
             bootstrap = text.split('kBootstrap%s[] PROGMEM = R"BOOT(' % mode, 1)[1].split(')BOOT"', 1)[0]
             self.assertIn("Get-ExecutionPolicy -Scope Process", bootstrap)
             self.assertIn("(Get-ExecutionPolicy) -eq 'Restricted'", bootstrap)
@@ -120,7 +125,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_console_exits_only_after_collector_and_cleanup(self):
         text = HEADER.read_text('utf-8')
-        for mode in ('Fast', 'Full', 'Hardware'):
+        for mode in ('Fast', 'Full'):
             bootstrap = text.split('kBootstrap%s[] PROGMEM = R"BOOT(' % mode, 1)[1].split(')BOOT"', 1)[0]
             self.assertTrue(bootstrap.endswith('}finally{$s.Dispose()};exit'))
             self.assertLess(bootstrap.index('& $f -Port $p -OpenSerial $s'),

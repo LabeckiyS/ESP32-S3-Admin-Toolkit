@@ -26,7 +26,7 @@ jobs:
       - name: Upload firmware binaries
         uses: actions/upload-artifact@v4
         with:
-          name: admin-toolkit-v0.5.2-lilygo-tdongle-s3
+          name: admin-toolkit-v0.6.0-lilygo-tdongle-s3
           path: firmware/.pio/build/lilygo-tdongle-s3/*.bin
           if-no-files-found: error
 
@@ -50,10 +50,10 @@ jobs:
         shell: powershell
         run: |
           .\collectors\windows\Collect-Inventory.ps1 -Mode Fast -NoTransfer
-      - name: Run Hardware inventory without USB or report files
+      - name: Run Full diagnostics without USB or report files
         shell: powershell
         run: |
-          .\collectors\windows\Collect-Inventory.ps1 -Mode Hardware -NoTransfer
+          .\collectors\windows\Collect-Inventory.ps1 -Mode Full -MaxPnpDevices 10 -NoTransfer
       - name: Verify temporary PowerShell execution policy is restored
         shell: powershell
         run: |

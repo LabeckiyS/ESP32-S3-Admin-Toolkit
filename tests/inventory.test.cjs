@@ -38,7 +38,7 @@ function runtime() {
   return {env,db,elements,execute:(code)=>vm.runInContext(code,env)};
 }
 const sample=(name='RUSAGRO-0042',ip='192.168.80.81',date='2026-11-26T11:00:00Z')=>({
-  mode:'hardware',collectedAt:date,
+  mode:'fast',collectedAt:date,
   system:{computerName:name,uuid:'763ef750-3222-4333-a922-abcdef777777',
     machine:{Manufacturer:'ASUS',Model:'All Series'},mainboard:{Manufacturer:'ASUS',Product:'H81M-K'}},
   cpu:[{Name:'Intel Pentium G3240',NumberOfCores:2,NumberOfLogicalProcessors:2}],
@@ -48,8 +48,11 @@ const sample=(name='RUSAGRO-0042',ip='192.168.80.81',date='2026-11-26T11:00:00Z'
     {Name:'Ethernet 2',MacAddress:'11-22-33-44-55-66',Status:'Disconnected',InterfaceDescription:'USB LAN'}],
     ipConfig:[{interfaceAlias:'Ethernet',ipv4:[ip]},{interfaceAlias:'Ethernet 2',ipv4:[]}]}
 });
-test('Hardware mode has a visible scan option and local Excel actions',()=>{
-  assert.match(html,/value="hardware" selected/);
+test('Exactly two diagnostics modes; the Excel register is an independent feature',()=>{
+  assert.match(html,/value="fast" selected/);
+  assert.match(html,/value="full"/);
+  assert.doesNotMatch(html,/value="hardware"/);
+  assert.equal((html.match(/<option value="(?:fast|full)"/g)||[]).length,2);
   assert.match(html,/id="registry-export"/);
   assert.match(html,/id="registry-rows"/);
   assert.match(html,/src="inventory.js/);
@@ -77,11 +80,23 @@ test('Old inventory never replaces newer reading',()=>{
   assert.equal(r.execute('addHardwareToRegistry(testData)'),false);
   assert.equal(r.execute('hwSummary(hardwareRegistry[0]).ipv4'),'192.168.2.25');
 });
-test('Normal fast/full report cannot be mistaken for hardware inventory',()=>{
+test('Fast and full reports both populate the same register; invalid empty reports are rejected',()=>{
   const r=runtime();
-  r.env.testData={mode:'full',system:{computerName:'PC'}};
+  r.env.testData=sample();
+  assert.equal(r.execute('addHardwareToRegistry(testData)'),true);
+  r.env.testData={...sample('RUSAGRO-0042','192.168.80.99','2026-11-26T14:00:00Z'),mode:'full'};
+  assert.equal(r.execute('addHardwareToRegistry(testData)'),true);
+  assert.equal(r.execute('hardwareRegistry.length'),1);
+  assert.equal(r.execute('hwSummary(hardwareRegistry[0]).ipv4'),'192.168.80.99');
+  r.env.testData={mode:'full',system:{computerName:'EMPTY-PC'}};
   assert.equal(r.execute('addHardwareToRegistry(testData)'),false);
-  assert.equal(r.execute('hardwareRegistry.length'),0);
+  assert.equal(r.execute('hardwareRegistry.length'),1);
+});
+test('Previously saved hardware-only reports remain readable for manual import',()=>{
+  const r=runtime();
+  r.env.testData={...sample(),mode:'hardware'};
+  assert.equal(r.execute('addHardwareToRegistry(testData)'),true);
+  assert.equal(r.execute('hardwareRegistry.length'),1);
 });
 test('Generated XLSX contains five ZIP worksheets, RAM, disks and IP text',async()=>{
   const r=runtime();
