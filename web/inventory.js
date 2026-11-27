@@ -7,8 +7,9 @@ const hwString = v => typeof v==='string' && v.trim() ? v.trim() : '—';
 const hwGiB = v => typeof v==='number' && Number.isFinite(v) && v>0 ? Math.round(v/1073741824*10)/10 : null;
 const hwDistinct = v => [...new Set(v.filter(x=>typeof x==='string' && x && x!=='—'))];
 function extractHardwareRecord(data) {
-  if(data?.mode!=='hardware') throw Error('Выбери режим «Железо и IP»');
+  if(!['fast','full','hardware'].includes(data?.mode)) throw Error('Неизвестный формат диагностического отчёта');
   const sys=hwObject(data.system), net=hwObject(data.network);
+  const sysModel=hwObject(sys.machine), sysBoard=hwObject(sys.mainboard);
   const name=hwString(sys.computerName);
   if(name==='—') throw Error('Не получено имя компьютера');
   const memory=hwArray(data.ram).map(hwObject).filter(x=>Number(x.CapacityBytes)>0).map(x=>({
@@ -28,13 +29,14 @@ function extractHardwareRecord(data) {
     mac:hwString(x.MacAddress),status:hwString(x.Status),
     ipv4:hwDistinct(hwArray(hwObject(cfg.find(c=>hwObject(c).interfaceAlias===x.Name)).ipv4))
   }));
+  if(!cpu.length && !memory.length && !disks.length) throw Error('Отчёт не содержит сведений об оборудовании');
   const uuid=hwString(sys.uuid);
   const valid=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(uuid) && !/^0{8}-|^f{8}-/i.test(uuid);
   return {
     id:valid ? 'uuid:'+uuid.toLowerCase() : 'name:'+name.toLowerCase(),name,
     uuid:valid?uuid:'',collectedAt:typeof data.collectedAt==='string'?data.collectedAt:'',
-    model:[hwObject(sys.machine).Manufacturer,hwObject(sys.machine).Model].filter(Boolean).join(' ')||'—',
-    board:[hwObject(sys.mainboard).Manufacturer,hwObject(sys.mainboard).Product].filter(Boolean).join(' ')||'—',
+    model:[sysModel.manufacturer || sysModel.Manufacturer,sysModel.model || sysModel.Model].filter(Boolean).join(' ')||'—',
+    board:[sysBoard.manufacturer || sysBoard.Manufacturer,sysBoard.product || sysBoard.Product].filter(Boolean).join(' ')||'—',
     cpu,memory,disks,adapters
   };
 }
@@ -105,7 +107,7 @@ function hwSetup(){
     }
   });
   document.getElementById('add-to-registry')?.addEventListener('click',()=>{
-    if(typeof report!=='undefined'&&report?.object?.mode==='hardware')addHardwareToRegistry(report.object);
+    if(typeof report!=='undefined'&&['fast','full','hardware'].includes(report?.object?.mode))addHardwareToRegistry(report.object);
   });
   renderHardwareRegistry();
 }

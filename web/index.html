@@ -85,12 +85,11 @@
       <p class="muted small">При RUS запуск заблокирован во избежание ошибочного ввода команды. Переключи раскладку на самом ПК, затем выбери ENG здесь. Автоматического Win+Space нет.</p>
       <label class="inline-label layout-selector" for="scan-mode">Режим проверки:
         <select id="scan-mode" class="layout-select">
-          <option value="hardware" selected>Железо и IP — для реестра ПК</option>
-          <option value="fast">Быстрая инвентаризация — основные характеристики, IP/MAC</option>
-          <option value="full">Расширенная диагностика — ПО, устройства, ошибки и безопасность</option>
+          <option value="fast" selected>Базовая диагностика — железо, IP/MAC и состояние системы</option>
+          <option value="full">Расширенная диагностика — всё из базовой плюс ПО, журналы и безопасность</option>
         </select>
       </label>
-      <p class="muted small">«Железо и IP» собирает только CPU, планки ОЗУ, физические диски и сетевые адреса. При стандартной политике Restricted допуск временный, только для текущего PowerShell; после проверки настройка восстанавливается, окно PowerShell закрывается автоматически при успехе. Другие режимы сохранены.</p>
+      <p class="muted small">Оба режима определяют процессор, тип и объём ОЗУ, HDD/SSD/NVMe, IP и MAC-адреса. Расширенный режим дополнительно проверяет ПО и состояние Windows. После успешной проверки окно PowerShell закрывается автоматически.</p>
       <div class="toolbar wrap"><button id="run" disabled>Старт проверки</button><button class="secondary" id="get" disabled>Последний отчёт ESP32</button><button class="secondary" id="cancel" disabled>Отменить</button></div>
       <p class="muted small">«Последний отчёт ESP32» читает данные из памяти прибора и не запускает проверку текущего ПК. Если новая диагностика завершилась ошибкой, здесь может остаться отчёт другого компьютера.</p>
       <div class="progress-bg"><div class="progress" id="progress"></div></div>
@@ -106,7 +105,7 @@
     </section>
     <section class="card" id="registry-panel">
       <h2>Реестр компьютеров</h2>
-      <p class="muted small">После новой успешной проверки «Железо и IP» ПК автоматически добавляется в реестр на этом телефоне. Повторная проверка того же компьютера обновляет запись.</p>
+      <p class="muted small">После новой успешной базовой или расширенной диагностики характеристики ПК обновляются в реестре этого телефона. Excel можно выгрузить в любое время.</p>
       <p class="muted" id="registry-count">В реестре: 0 ПК</p>
       <div class="toolbar wrap">
         <button type="button" id="registry-export">Скачать Excel (.xlsx)</button>
@@ -123,9 +122,9 @@
   </div>
   <p class="foot">Панель загружается с GitHub Pages, но текст клавиатуры и отчёты по сети GitHub не отправляются: обмен с прибором идёт напрямую через Web Bluetooth.</p>
 </main>
-<script src="report.js?v=050" defer></script>
-<script src="inventory.js?v=050" defer></script>
-<script src="app.js?v=050" defer></script>
+<script src="report.js?v=060" defer></script>
+<script src="inventory.js?v=060" defer></script>
+<script src="app.js?v=060" defer></script>
 <script src="keyboard.js?v=041" defer></script>
 </body>
 </html>

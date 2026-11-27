@@ -69,7 +69,7 @@ function formatTechnicalReport(data) {
   if (data.mode === 'fast') {
     const sys=object(data.system),os=object(sys.os),machine=object(sys.machine);
     const board=object(sys.mainboard),network=object(data.network),access=object(data.localAccess),sec=object(data.security);
-    add('БЫСТРАЯ ИНВЕНТАРИЗАЦИЯ ПК');
+    add('БАЗОВАЯ ДИАГНОСТИКА ПК');
     add('========================');
     field('Имя ПК',sys.computerName);
     field('Дата UTC',data.collectedAt);
@@ -79,8 +79,8 @@ function formatTechnicalReport(data) {
     field('Материнская плата',[board.manufacturer,board.product].filter(Boolean).join(' '));
     field('ОЗУ всего',bytes(machine.totalMemory));
     sectionList('Процессор',data.cpu,(r,i)=>{item(i,r.Name);details([['Ядра',r.NumberOfCores],['Потоки',r.NumberOfLogicalProcessors]]);});
-    sectionList('Оперативная память',data.ram,(r,i)=>{item(i,r.DeviceLocator);details([['Объём',bytes(r.CapacityBytes)],['МГц',r.Speed]]);});
-    sectionList('Накопители',data.disks,(r,i)=>{item(i,r.Model);field('Размер',bytes(r.SizeBytes));});
+    sectionList('Оперативная память',data.ram,(r,i)=>{item(i,r.DeviceLocator);details([['Тип',r.MemoryType === 'Unknown' ? 'не определён' : r.MemoryType],['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed]]);});
+    sectionList('Физические накопители',data.disks,(r,i)=>{item(i,r.Model);details([['Тип',r.DiskType === 'Unknown' ? 'не определён' : (r.DiskType === 'SSD (bus unknown)' ? 'SSD (интерфейс не определён)' : r.DiskType)],['Интерфейс',r.BusType],['Размер',bytes(r.SizeBytes)]]);});
     // Zero-sized phantom volumes are distracting in a quick asset inventory.
     const volumes = array(data.volumes).filter(r => Number(r.SizeBytes) > 0);
     sectionList('Разделы', data.volumes?.unavailable ? data.volumes : volumes,
@@ -136,12 +136,12 @@ function formatTechnicalReport(data) {
   });
   sectionList('Модули оперативной памяти', data.ram, (r,i) => {
     item(i, r.DeviceLocator);
-    details([['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed],
+    details([['Тип',r.MemoryType === 'Unknown' ? 'не определён' : r.MemoryType],['Объём',bytes(r.CapacityBytes)],['Частота МГц',r.Speed],
       ['Производитель',r.Manufacturer],['Артикул',r.PartNumber]]);
   });
   sectionList('Накопители', data.disks, (r,i) => {
     item(i, r.Model);
-    details([['Тип',r.MediaType],['Интерфейс',r.InterfaceType],['Размер',bytes(r.SizeBytes)]]);
+    details([['Тип',r.DiskType === 'Unknown' ? 'не определён' : (r.DiskType === 'SSD (bus unknown)' ? 'SSD (интерфейс не определён)' : r.DiskType)],['Интерфейс',r.BusType],['Размер',bytes(r.SizeBytes)]]);
   });
   sectionList('Дисковые разделы', data.volumes, (r,i) => {
     item(i, r.DeviceID);
